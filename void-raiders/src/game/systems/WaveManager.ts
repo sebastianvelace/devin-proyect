@@ -26,7 +26,7 @@ export const LEVELS: LevelDef[] = [
   {
     name: "OUTER RIM",
     waves: [
-      { groups: [{ type: "basic", count: 4 }], formation: "line" },
+      { groups: [{ type: "basic", count: 3 }], formation: "line" },
       { groups: [{ type: "basic", count: 3 }, { type: "fast", count: 2 }], formation: "random" },
       { groups: [{ type: "basic", count: 5 }, { type: "fast", count: 2 }], formation: "v" },
     ],

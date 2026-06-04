@@ -2,10 +2,10 @@
 
 import type { Vec2 } from "../../types";
 import type { InputManager } from "../systems/InputManager";
-import { clamp, normalize } from "../../utils/math";
+import { clamp, normalize, lerp, lerpAngle } from "../../utils/math";
 
 const BASE_SPEED = 320; // px/s
-const INVULN_TIME = 1.5; // segundos tras recibir daño
+const INVULN_TIME = 2.0; // segundos tras recibir daño
 const TRAIL_MAX = 18;
 
 interface TrailDot {
@@ -26,6 +26,9 @@ export class Player {
   alive = true;
 
   private readonly trail: TrailDot[] = [];
+  private vx = 0; // velocidad suavizada (px/s)
+  private vy = 0;
+  private trailTimer = 0;
 
   constructor(x: number, y: number) {
     this.x = x;
@@ -54,22 +57,33 @@ export class Player {
     if (input.isDown("KeyS") || input.isDown("ArrowDown")) dy += 1;
 
     const moving = dx !== 0 || dy !== 0;
+    const speed = BASE_SPEED * this.speedMult;
+    let tx = 0;
+    let ty = 0;
     if (moving) {
       const n = normalize(dx, dy);
-      const speed = BASE_SPEED * this.speedMult;
-      this.x += n.x * speed * dt;
-      this.y += n.y * speed * dt;
+      tx = n.x * speed;
+      ty = n.y * speed;
     }
+    // suavizado exponencial de la velocidad (aceleración/frenado fluidos)
+    const accel = 1 - Math.exp(-dt * 16);
+    this.vx = lerp(this.vx, tx, accel);
+    this.vy = lerp(this.vy, ty, accel);
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
 
     // la nave no sale del canvas
     this.x = clamp(this.x, this.radius, width - this.radius);
     this.y = clamp(this.y, this.radius, height - this.radius);
 
-    // apuntar hacia el cursor
-    this.angle = Math.atan2(pointer.y - this.y, pointer.x - this.x);
+    // apuntar hacia el cursor, girando suavemente
+    const targetAngle = Math.atan2(pointer.y - this.y, pointer.x - this.x);
+    this.angle = lerpAngle(this.angle, targetAngle, 1 - Math.exp(-dt * 24));
 
-    // trail de partículas (atenuándose)
-    if (moving) {
+    // trail de partículas (a intervalos fijos, independiente del FPS)
+    this.trailTimer -= dt;
+    if (moving && this.trailTimer <= 0) {
+      this.trailTimer = 0.02;
       this.trail.push({ x: this.x, y: this.y, life: 0.4 });
       if (this.trail.length > TRAIL_MAX) this.trail.shift();
     }

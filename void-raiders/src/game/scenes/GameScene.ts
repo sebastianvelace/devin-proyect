@@ -51,7 +51,7 @@ export class GameScene implements Scene {
 
   constructor(game: Game) {
     this.game = game;
-    this.player = new Player(game.width / 2, game.height / 2);
+    this.player = new Player(game.width / 2, game.height * 0.82);
   }
 
   enter(): void {
@@ -127,7 +127,7 @@ export class GameScene implements Scene {
   private updateEnemiesAndWaves(dt: number): void {
     const incoming = this.waves.update(dt, this.enemies.length, this.game.width, this.game.height);
     if (incoming.length) this.enemies.push(...incoming);
-    for (const e of this.enemies) e.update(dt, this.player, this.bullets);
+    for (const e of this.enemies) e.update(dt, this.player, this.bullets, this.game.width);
   }
 
   private updateBullets(dt: number): void {
@@ -152,8 +152,11 @@ export class GameScene implements Scene {
     // balas enemigas vs jugador
     this.collisions.enemyBulletsVsPlayer(this.bullets, this.player, () => this.hitPlayer());
 
-    // contacto enemigo-jugador
-    this.collisions.enemiesVsPlayer(this.enemies, this.player, () => this.hitPlayer());
+    // contacto enemigo-jugador: daña a la nave y el enemigo se destruye al chocar
+    this.collisions.enemiesVsPlayer(this.enemies, this.player, (enemy) => {
+      this.hitPlayer();
+      enemy.alive = false;
+    });
   }
 
   private cleanupEnemies(): void {

@@ -3,7 +3,9 @@
 import type { ClickEvent, Scene, Vec2 } from "../types";
 import { InputManager } from "./systems/InputManager";
 
-const MAX_DT = 1 / 30; // cap para evitar saltos tras pestaña inactiva
+const STEP = 1 / 60; // paso fijo de simulación (s) → movimiento consistente
+const MAX_STEPS = 5; // tope de sub-pasos por frame (evita "espiral de la muerte")
+const MAX_FRAME = 0.25; // descarta saltos enormes (pestaña inactiva)
 
 /**
  * Núcleo del juego: configura el canvas (con devicePixelRatio), corre el game
@@ -29,6 +31,7 @@ export class Game {
   private clicks: ClickEvent[] = [];
   private rafId = 0;
   private lastTime = 0;
+  private accumulator = 0;
   private running = false;
 
   constructor(container: HTMLElement) {
@@ -73,17 +76,26 @@ export class Game {
 
   private tick = (now: number): void => {
     if (!this.running) return;
-    let dt = (now - this.lastTime) / 1000;
+    let frame = (now - this.lastTime) / 1000;
     this.lastTime = now;
-    if (dt > MAX_DT) dt = MAX_DT;
+    if (frame > MAX_FRAME) frame = MAX_FRAME;
 
-    const { ctx } = this;
-    if (this.scene) {
-      this.scene.update(dt);
-      this.scene.render(ctx);
+    const { ctx, scene } = this;
+    if (scene) {
+      // Simulación a paso fijo: el movimiento es idéntico sea cual sea el FPS
+      // y los frames lentos "se ponen al día" en vez de ralentizar el juego.
+      this.accumulator += frame;
+      let steps = 0;
+      while (this.accumulator >= STEP && steps < MAX_STEPS) {
+        scene.update(STEP);
+        this.accumulator -= STEP;
+        steps += 1;
+        this.input.endFrame();
+        this.clicks.length = 0; // los clicks se consumen por paso
+      }
+      if (steps === MAX_STEPS) this.accumulator = 0; // descarta acumulado excesivo
+      scene.render(ctx);
     }
-    this.input.endFrame();
-    this.clicks.length = 0; // los clicks se consumen por frame
     this.rafId = requestAnimationFrame(this.tick);
   };
 
