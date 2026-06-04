@@ -30,6 +30,7 @@ export const LEVELS: LevelDef[] = [
       { groups: [{ type: "basic", count: 3 }, { type: "fast", count: 2 }], formation: "random" },
       { groups: [{ type: "basic", count: 5 }, { type: "fast", count: 2 }], formation: "v" },
     ],
+    boss: true,
   },
   {
     name: "ASTEROID BELT",
@@ -39,6 +40,7 @@ export const LEVELS: LevelDef[] = [
       { groups: [{ type: "sniper", count: 2 }, { type: "fast", count: 3 }], formation: "random" },
       { groups: [{ type: "tank", count: 2 }, { type: "bomber", count: 2 }], formation: "circle" },
     ],
+    boss: true,
   },
   {
     name: "VOID CORE",

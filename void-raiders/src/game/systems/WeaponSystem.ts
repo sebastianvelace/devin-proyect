@@ -1,4 +1,4 @@
-// Cadencia y patrones de disparo de las 4 armas
+// Cadencia y patrones de disparo + sistema de munición con recarga automática
 
 import type { WeaponType } from "../../types";
 import type { Bullet } from "../entities/Bullet";
@@ -9,16 +9,19 @@ interface WeaponDef {
   color: string;
   cooldown: number; // segundos entre disparos
   damage: number;
-  speed: number; // px/s
+  speed: number;    // px/s
   radius: number;
+  maxAmmo: number;  // munición máxima por cargador
 }
+
+const RELOAD_TIME = 5; // segundos de recarga automática
 
 // Paleta Interstellar: azul hielo, ámbar, violeta, oro
 export const WEAPONS: Record<WeaponType, WeaponDef> = {
-  laser:    { color: "#60c8ff", cooldown: 0.15, damage: 1, speed: 720, radius: 3 },
-  missiles: { color: "#e08030", cooldown: 0.4,  damage: 2, speed: 520, radius: 4 },
-  plasma:   { color: "#c030cc", cooldown: 0.5,  damage: 3, speed: 340, radius: 9 },
-  burst:    { color: "#f0c030", cooldown: 0.6,  damage: 1, speed: 640, radius: 3 },
+  laser:    { color: "#60c8ff", cooldown: 0.15, damage: 1, speed: 720, radius: 3, maxAmmo: 30 },
+  missiles: { color: "#e08030", cooldown: 0.4,  damage: 2, speed: 520, radius: 4, maxAmmo: 10 },
+  plasma:   { color: "#c030cc", cooldown: 0.5,  damage: 3, speed: 340, radius: 9, maxAmmo: 8  },
+  burst:    { color: "#f0c030", cooldown: 0.6,  damage: 1, speed: 640, radius: 3, maxAmmo: 16 },
 };
 
 export const WEAPON_LABEL: Record<WeaponType, string> = {
@@ -31,15 +34,23 @@ export const WEAPON_LABEL: Record<WeaponType, string> = {
 /** Opciones aplicadas por power-ups al disparar. */
 export interface FireMods {
   damageMult?: number;
-  multishot?: boolean; // añade abanico extra
+  multishot?: boolean;
 }
 
 export class WeaponSystem {
   current: WeaponType = "laser";
   private cooldown = 0;
+  private _ammo = WEAPONS["laser"].maxAmmo;
+  private _reloading = false;
+  private _reloadTimer = 0;
 
-  setWeapon(weapon: WeaponType): void {
-    this.current = weapon;
+  get ammo(): number         { return this._ammo; }
+  get maxAmmo(): number      { return WEAPONS[this.current].maxAmmo; }
+  get isReloading(): boolean { return this._reloading; }
+  /** 0 = recarga iniciada, 1 = recarga completa. */
+  get reloadProgress(): number {
+    if (!this._reloading) return 1;
+    return 1 - this._reloadTimer / RELOAD_TIME;
   }
 
   get color(): string {
@@ -47,17 +58,30 @@ export class WeaponSystem {
   }
 
   get ready(): boolean {
-    return this.cooldown <= 0;
+    return this.cooldown <= 0 && !this._reloading;
+  }
+
+  /** Cambia de arma; cancela la recarga y restaura el cargador del arma nueva. */
+  setWeapon(weapon: WeaponType): void {
+    if (this.current === weapon) return;
+    this.current = weapon;
+    this._ammo = WEAPONS[weapon].maxAmmo;
+    this._reloading = false;
+    this._reloadTimer = 0;
+    this.cooldown = 0;
   }
 
   update(dt: number): void {
     if (this.cooldown > 0) this.cooldown -= dt;
+    if (this._reloading) {
+      this._reloadTimer -= dt;
+      if (this._reloadTimer <= 0) {
+        this._reloading = false;
+        this._ammo = WEAPONS[this.current].maxAmmo;
+      }
+    }
   }
 
-  /**
-   * Intenta disparar desde (x, y) hacia `angle`. Si está en cooldown no hace
-   * nada. Spawnea balas en `pool`.
-   */
   tryFire(
     x: number,
     y: number,
@@ -65,9 +89,16 @@ export class WeaponSystem {
     pool: Pool<Bullet>,
     mods: FireMods = {},
   ): boolean {
-    if (this.cooldown > 0) return false;
+    if (this.cooldown > 0 || this._reloading || this._ammo <= 0) return false;
     const def = WEAPONS[this.current];
     this.cooldown = def.cooldown;
+
+    // Consume munición
+    this._ammo--;
+    if (this._ammo <= 0) {
+      this._reloading = true;
+      this._reloadTimer = RELOAD_TIME;
+    }
 
     const damage = def.damage * (mods.damageMult ?? 1);
     const spawn = (a: number): void => {
@@ -104,7 +135,6 @@ export class WeaponSystem {
     }
 
     if (mods.multishot) {
-      // abanico extra del power-up multi-shot
       spawn(angle - 0.3);
       spawn(angle + 0.3);
     }

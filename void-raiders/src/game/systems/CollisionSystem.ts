@@ -49,6 +49,23 @@ export class CollisionSystem {
     }
   }
 
+  /** Balas amigas vs un círculo genérico (boss, etc.). */
+  bulletsVsCircle(
+    bullets: Pool<Bullet>,
+    cx: number,
+    cy: number,
+    cr: number,
+    onHit: (bullet: Bullet) => void,
+  ): void {
+    for (const b of bullets.active) {
+      if (!b.alive || !b.friendly) continue;
+      if (overlap(b.x, b.y, b.radius, cx, cy, cr)) {
+        onHit(b);
+        if (!b.piercing) b.alive = false;
+      }
+    }
+  }
+
   /** Contacto enemigo-jugador. */
   enemiesVsPlayer(
     enemies: readonly Enemy[],
