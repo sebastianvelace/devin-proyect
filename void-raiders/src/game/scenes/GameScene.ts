@@ -3,6 +3,7 @@
 import type { Scene, WeaponType } from "../../types";
 import type { Game } from "../Game";
 import { Bullet } from "../entities/Bullet";
+import { Boss } from "../entities/Boss";
 import { Enemy } from "../entities/Enemy";
 import { Player } from "../entities/Player";
 import { Camera } from "../systems/Camera";
@@ -13,9 +14,8 @@ import { WaveManager, LEVELS } from "../systems/WaveManager";
 import { WeaponSystem } from "../systems/WeaponSystem";
 import { HUD } from "../ui/HUD";
 import { Pool } from "../../utils/pool";
-import { distance } from "../../utils/math";
+import { distance, distanceSq, lerpAngle } from "../../utils/math";
 import { MenuScene } from "./MenuScene";
-import { GameOverScene } from "./GameOverScene";
 import { soundManager } from "../../audio/SoundManager";
 
 const WEAPON_KEYS: Record<string, WeaponType> = {
@@ -30,7 +30,9 @@ const BOMBER_AOE   = 84;
 
 const SHOOT_SOUND_GAP: Record<WeaponType, number> = { laser: 0.12, missiles: 0.35, plasma: 0.45, burst: 0.55 };
 
-type Status = "playing" | "cleared" | "gameover";
+type Status = "playing" | "boss" | "cleared" | "gameover";
+
+const BOSS_NAMES = ["VOID HERALD", "GRAVITY LEVIATHAN", "VOID CORE"];
 
 export class GameScene implements Scene {
   private readonly game: Game;
@@ -44,22 +46,22 @@ export class GameScene implements Scene {
   private readonly hud = new HUD();
   private player: Player;
   private enemies: Enemy[] = [];
+  private boss: Boss | null = null;
 
   private status: Status = "playing";
-  private level = 1;
+  private level: number;
   private score = 0;
   private multiplier = 1;
   private comboCount = 0;
   private comboTimer = 0;
   private comboFlash = 0;
   private time = 0;
-  private transitionTimer = -1; // cuenta regresiva antes de cambiar escena
 
-  // timers de cooldown de sonido de disparo
   private shootTimers: Record<WeaponType, number> = { laser: 0, missiles: 0, plasma: 0, burst: 0 };
 
-  constructor(game: Game) {
+  constructor(game: Game, level = 1) {
     this.game = game;
+    this.level = level;
     this.player = new Player(game.width / 2, game.height * 0.82);
   }
 
@@ -86,24 +88,22 @@ export class GameScene implements Scene {
     this.camera.update(dt);
     if (this.comboFlash > 0) this.comboFlash -= dt;
 
-    // Decrementar timers de sonido de disparo
     for (const k in this.shootTimers) {
       this.shootTimers[k as WeaponType] = Math.max(0, this.shootTimers[k as WeaponType] - dt);
     }
 
-    if (this.status !== "playing") {
-      if (this.transitionTimer > 0) {
-        this.transitionTimer -= dt;
-        if (this.transitionTimer <= 0) {
-          if (this.status === "gameover") {
-            this.game.changeScene(new GameOverScene(this.game, this.score));
-          }
-        }
-        return;
-      }
+    // Estado terminal
+    if (this.status === "cleared" || this.status === "gameover") {
       if (input.wasPressed("Escape")) this.game.changeScene(new MenuScene(this.game));
       if (this.status === "gameover" && input.wasPressed("KeyR")) {
-        this.game.changeScene(new GameScene(this.game));
+        this.game.changeScene(new GameScene(this.game, this.level));
+      }
+      if (this.status === "cleared" && (input.wasPressed("Space") || input.wasPressed("Enter"))) {
+        if (this.level < LEVELS.length) {
+          this.game.changeScene(new GameScene(this.game, this.level + 1));
+        } else {
+          this.game.changeScene(new MenuScene(this.game));
+        }
       }
       return;
     }
@@ -122,13 +122,17 @@ export class GameScene implements Scene {
 
     this.updateCombo(dt);
     this.updatePlayerAndWeapons(dt);
-    this.updateEnemiesAndWaves(dt);
     this.updateBullets(dt);
     this.resolveCollisions();
-    this.cleanupEnemies();
 
-    if (this.waves.isComplete && this.enemies.length === 0) {
-      this.status = "cleared";
+    if (this.status === "playing") {
+      this.updateEnemiesAndWaves(dt);
+      this.cleanupEnemies();
+      if (this.waves.isComplete && this.enemies.length === 0) {
+        this.spawnBossOrClear();
+      }
+    } else if (this.status === "boss" && this.boss) {
+      this.updateBoss(dt);
     }
   }
 
@@ -154,7 +158,6 @@ export class GameScene implements Scene {
       const fired = this.weapons.tryFire(nose.x, nose.y, this.player.angle, this.bullets);
       if (fired) {
         if (this.weapons.current === "plasma") this.camera.shake(3, 0.1);
-        // Sonido de disparo (con throttle para no saturar)
         const w = this.weapons.current;
         if (this.shootTimers[w] <= 0) {
           soundManager.play(`shoot_${w}`);
@@ -174,6 +177,18 @@ export class GameScene implements Scene {
     const { width, height } = this.game;
     const margin = 40;
     for (const b of this.bullets.active) {
+      // Misiles guiados: giran suavemente hacia el enemigo más cercano
+      if (b.homing && b.friendly && b.alive) {
+        const target = this.nearestTarget(b.x, b.y);
+        if (target) {
+          const desired = Math.atan2(target.y - b.y, target.x - b.x);
+          const current = Math.atan2(b.vy, b.vx);
+          const steered = lerpAngle(current, desired, 1 - Math.exp(-dt * 4.5));
+          const spd = Math.hypot(b.vx, b.vy);
+          b.vx = Math.cos(steered) * spd;
+          b.vy = Math.sin(steered) * spd;
+        }
+      }
       b.update(dt);
       if (b.x < -margin || b.x > width + margin || b.y < -margin || b.y > height + margin) {
         b.alive = false;
@@ -182,15 +197,57 @@ export class GameScene implements Scene {
     this.bullets.sweep((b) => !b.alive);
   }
 
+  private nearestTarget(x: number, y: number): { x: number; y: number } | null {
+    let best: { x: number; y: number } | null = null;
+    let bestDist = Infinity;
+    for (const e of this.enemies) {
+      if (!e.alive) continue;
+      const d = distanceSq(x, y, e.x, e.y);
+      if (d < bestDist) { bestDist = d; best = e; }
+    }
+    if (this.boss?.alive) {
+      const d = distanceSq(x, y, this.boss.x, this.boss.y);
+      if (d < bestDist) best = this.boss;
+    }
+    return best;
+  }
+
+  private updateBoss(dt: number): void {
+    if (!this.boss) return;
+    this.boss.update(dt, this.player, this.bullets, this.game.width);
+
+    if (this.boss.phaseJustChanged) {
+      this.camera.shake(12, 0.4);
+      this.particles.explosion(this.boss.x, this.boss.y, this.boss.color, 35, 320);
+    }
+  }
+
   private resolveCollisions(): void {
+    // Balas del jugador vs enemigos
     this.collisions.bulletsVsEnemies(this.bullets, this.enemies, (enemy, bullet) => {
       this.particles.spark(bullet.x, bullet.y, bullet.color, 5);
       soundManager.play('enemy_hit');
       if (enemy.takeDamage(bullet.damage)) this.onEnemyKilled(enemy);
     });
 
+    // Balas del jugador vs boss
+    if (this.boss?.alive) {
+      this.collisions.bulletsVsCircle(this.bullets, this.boss.x, this.boss.y, this.boss.radius, (b) => {
+        this.particles.spark(b.x, b.y, b.color, 5);
+        if (this.boss!.takeDamage(b.damage)) this.onBossKilled();
+      });
+      // Contacto directo boss-jugador
+      if (!this.player.isInvulnerable && this.player.alive) {
+        const d2 = distanceSq(this.boss.x, this.boss.y, this.player.x, this.player.y);
+        const minDist = this.boss.radius + this.player.radius;
+        if (d2 < minDist * minDist) this.hitPlayer();
+      }
+    }
+
+    // Balas enemigas vs jugador
     this.collisions.enemyBulletsVsPlayer(this.bullets, this.player, () => this.hitPlayer());
 
+    // Contacto enemigo-jugador
     this.collisions.enemiesVsPlayer(this.enemies, this.player, (enemy) => {
       this.hitPlayer();
       enemy.alive = false;
@@ -202,6 +259,17 @@ export class GameScene implements Scene {
       if (!e.alive && !e.scored) this.onEnemyKilled(e);
     }
     this.enemies = this.enemies.filter((e) => e.alive);
+  }
+
+  private spawnBossOrClear(): void {
+    const levelDef = LEVELS[this.level - 1];
+    if (levelDef.boss) {
+      this.boss = new Boss(this.game.width / 2, -80, this.level);
+      this.status = "boss";
+      this.camera.shake(8, 0.4);
+    } else {
+      this.status = "cleared";
+    }
   }
 
   // ─── eventos ───────────────────────────────────────────────────────────────
@@ -229,6 +297,17 @@ export class GameScene implements Scene {
     this.addKill(enemy.points);
   }
 
+  private onBossKilled(): void {
+    if (!this.boss || this.boss.scored) return;
+    this.boss.scored = true;
+    this.particles.explosion(this.boss.x, this.boss.y, this.boss.color, 60, 380);
+    this.particles.explosion(this.boss.x, this.boss.y, "#ffffff", 30, 500);
+    this.camera.shake(16, 0.6);
+    soundManager.play('explosion_large');
+    this.addKill(this.boss.points);
+    this.status = "cleared";
+  }
+
   private addKill(points: number): void {
     this.comboCount += 1;
     this.comboTimer = COMBO_WINDOW;
@@ -248,10 +327,7 @@ export class GameScene implements Scene {
     this.multiplier = 1;
     this.comboCount = 0;
     soundManager.play('player_hit');
-    if (died) {
-      this.status = "gameover";
-      this.transitionTimer = 2.2; // 2.2s de explosión visible antes de ir a GameOverScene
-    }
+    if (died) this.status = "gameover";
   }
 
   // ─── render ────────────────────────────────────────────────────────────────
@@ -259,35 +335,45 @@ export class GameScene implements Scene {
   render(ctx: CanvasRenderingContext2D): void {
     const { width: w, height: h } = this.game;
 
-    // Fondo negro profundo
     ctx.fillStyle = "#020408";
     ctx.fillRect(0, 0, w, h);
 
-    // Nebulosas de fondo
     this.starfield.renderNebula(ctx);
     this.starfield.render(ctx);
 
     this.camera.begin(ctx);
     for (const b of this.bullets.active) b.render(ctx);
     for (const e of this.enemies) e.render(ctx);
+    if (this.boss?.alive) this.boss.render(ctx);
     this.particles.render(ctx);
     if (this.player.alive) this.player.render(ctx, this.weapons.color);
     this.camera.end(ctx);
 
-    this.hud.render(ctx, w, {
-      score:      this.score,
-      level:      this.level,
-      levelName:  LEVELS[this.level - 1].name,
-      wave:       this.waves.waveNumber,
-      totalWaves: this.waves.totalWaves,
-      lives:      this.player.lives,
-      weapon:     this.weapons.current,
-      weaponColor: this.weapons.color,
-      multiplier: this.multiplier,
+    this.hud.render(ctx, w, h, {
+      score:          this.score,
+      level:          this.level,
+      levelName:      LEVELS[this.level - 1].name,
+      wave:           this.waves.waveNumber,
+      totalWaves:     this.waves.totalWaves,
+      lives:          this.player.lives,
+      weapon:         this.weapons.current,
+      weaponColor:    this.weapons.color,
+      multiplier:     this.multiplier,
+      ammo:           this.weapons.ammo,
+      maxAmmo:        this.weapons.maxAmmo,
+      isReloading:    this.weapons.isReloading,
+      reloadProgress: this.weapons.reloadProgress,
+      ...(this.boss ? {
+        bossHp:    this.boss.hp,
+        bossMaxHp: this.boss.maxHp,
+        bossPhase: this.boss.phase,
+        bossColor: this.boss.color,
+        bossName:  BOSS_NAMES[(this.level - 1) % BOSS_NAMES.length],
+      } : {}),
     });
 
     if (this.comboFlash > 0 && this.multiplier > 1) this.renderComboFlash(ctx, w, h);
-    if (this.status !== "playing") this.renderOverlay(ctx, w, h);
+    if (this.status === "cleared" || this.status === "gameover") this.renderOverlay(ctx, w, h);
 
     this.renderVignette(ctx, w, h);
   }
@@ -313,7 +399,6 @@ export class GameScene implements Scene {
     ctx.textBaseline = "middle";
 
     if (this.status === "gameover") {
-      // Título rojo oscuro
       ctx.font = "900 68px 'Orbitron', sans-serif";
       ctx.fillStyle = "#cc2030";
       ctx.shadowColor = "#cc2030";
@@ -325,7 +410,6 @@ export class GameScene implements Scene {
       ctx.fillStyle = "#887766";
       ctx.fillText("\"They say we won't survive the void.\"", w / 2, h / 2);
     } else {
-      // Nivel completado
       ctx.font = "900 58px 'Orbitron', sans-serif";
       ctx.fillStyle = "#e8a840";
       ctx.shadowColor = "#e8a840";
@@ -343,7 +427,9 @@ export class GameScene implements Scene {
     ctx.letterSpacing = "2px";
     const hint = this.status === "gameover"
       ? "R  RETRY  ·  ESC  MENU"
-      : "ESC  MENU";
+      : this.level < LEVELS.length
+        ? "SPACE  NEXT SECTOR  ·  ESC  MENU"
+        : "ESC  MENU";
     ctx.fillText(hint, w / 2, h / 2 + 68);
     ctx.letterSpacing = "0px";
     ctx.restore();

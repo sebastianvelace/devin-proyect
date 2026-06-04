@@ -13,6 +13,17 @@ export interface HudState {
   weapon: WeaponType;
   weaponColor: string;
   multiplier: number;
+  // munición
+  ammo: number;
+  maxAmmo: number;
+  isReloading: boolean;
+  reloadProgress: number; // 0..1
+  // boss (opcionales)
+  bossHp?: number;
+  bossMaxHp?: number;
+  bossPhase?: number;
+  bossColor?: string;
+  bossName?: string;
 }
 
 const AMBER  = "#e8a840";
@@ -21,27 +32,29 @@ const DIM    = "#667788";
 const WARM_W = "#f0e8d0";
 
 export class HUD {
-  render(ctx: CanvasRenderingContext2D, w: number, state: HudState): void {
+  render(ctx: CanvasRenderingContext2D, w: number, h: number, state: HudState): void {
     ctx.save();
 
     this.renderTopBar(ctx, w, state);
     this.renderLives(ctx, state.lives);
     this.renderWeapon(ctx, state.weapon, state.weaponColor);
+    this.renderAmmo(ctx, state);
     this.renderLevelInfo(ctx, w, state);
+
+    if (state.bossHp !== undefined && state.bossMaxHp !== undefined) {
+      this.renderBossBar(ctx, w, h, state);
+    }
 
     ctx.restore();
   }
 
   private renderTopBar(ctx: CanvasRenderingContext2D, w: number, state: HudState): void {
-    // Barra translúcida superior
     ctx.fillStyle = "rgba(2,3,8,0.65)";
     ctx.fillRect(0, 0, w, 58);
 
-    // Separador ámbar
     ctx.fillStyle = AMBER + "44";
     ctx.fillRect(0, 57, w, 1);
 
-    // Score centralizado
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     ctx.font = "700 30px 'JetBrains Mono', monospace";
@@ -51,7 +64,6 @@ export class HUD {
     ctx.fillText(state.score.toString().padStart(8, "0"), w / 2, 12);
     ctx.shadowBlur = 0;
 
-    // Multiplicador de combo
     if (state.multiplier > 1) {
       ctx.font = "700 14px 'JetBrains Mono', monospace";
       ctx.fillStyle = AMBER;
@@ -66,14 +78,12 @@ export class HUD {
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
 
-    // Label
     ctx.font = "400 10px 'JetBrains Mono', monospace";
     ctx.fillStyle = DIM;
     ctx.letterSpacing = "2px";
     ctx.fillText("CREW", 18, 10);
     ctx.letterSpacing = "0px";
 
-    // Triángulos de vida (iconos nave)
     const count = Math.max(0, lives);
     for (let i = 0; i < 3; i++) {
       const x = 18 + i * 20;
@@ -119,11 +129,53 @@ export class HUD {
     ctx.shadowBlur = 0;
   }
 
+  private renderAmmo(ctx: CanvasRenderingContext2D, state: HudState): void {
+    const x = 18;
+    const y = 64; // justo debajo del top bar
+    const barW = 140;
+    const barH = 5;
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+
+    if (state.isReloading) {
+      // Parpadeo cada 250ms
+      const blink = Math.floor(Date.now() / 250) % 2 === 0;
+      ctx.font = "600 11px 'JetBrains Mono', monospace";
+      ctx.fillStyle = blink ? "#ffcc00" : "#886600";
+      ctx.fillText("RELOAD", x, y);
+
+      const barX = x + 64;
+      const fillW = barW - 64;
+      ctx.fillStyle = "rgba(255,255,255,0.1)";
+      ctx.fillRect(barX, y + 2, fillW, barH);
+      ctx.fillStyle = blink ? "#ffcc00" : "#886600";
+      ctx.shadowColor = "#ffcc00";
+      ctx.shadowBlur = blink ? 6 : 0;
+      ctx.fillRect(barX, y + 2, fillW * state.reloadProgress, barH);
+      ctx.shadowBlur = 0;
+    } else {
+      const ratio = state.maxAmmo > 0 ? state.ammo / state.maxAmmo : 0;
+      const barColor = ratio < 0.25 ? "#ff5030" : state.weaponColor;
+
+      ctx.fillStyle = "rgba(255,255,255,0.1)";
+      ctx.fillRect(x, y + 2, barW, barH);
+      ctx.fillStyle = barColor;
+      ctx.shadowColor = barColor;
+      ctx.shadowBlur = 4;
+      ctx.fillRect(x, y + 2, barW * ratio, barH);
+      ctx.shadowBlur = 0;
+
+      ctx.font = "600 11px 'JetBrains Mono', monospace";
+      ctx.fillStyle = ratio < 0.25 ? "#ff5030" : DIM;
+      ctx.fillText(`${state.ammo}/${state.maxAmmo}`, barW + x + 6, y);
+    }
+  }
+
   private renderLevelInfo(ctx: CanvasRenderingContext2D, w: number, state: HudState): void {
     ctx.textAlign = "right";
     ctx.textBaseline = "top";
 
-    // Nombre del nivel
     ctx.font = "700 13px 'Orbitron', sans-serif";
     ctx.fillStyle = ICE;
     ctx.shadowColor = ICE;
@@ -131,7 +183,6 @@ export class HUD {
     ctx.fillText(`LVL ${state.level}  ${state.levelName.toUpperCase()}`, w - 18, 10);
     ctx.shadowBlur = 0;
 
-    // Barra de progreso de oleadas
     const barW = 160;
     const barH = 3;
     const bx = w - 18 - barW;
@@ -151,5 +202,50 @@ export class HUD {
     ctx.letterSpacing = "1px";
     ctx.fillText(`WAVE ${state.wave}/${state.totalWaves}`, w - 18, 38);
     ctx.letterSpacing = "0px";
+  }
+
+  private renderBossBar(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+    state: HudState,
+  ): void {
+    const color = state.bossColor ?? "#cc00ff";
+    const name = state.bossName ?? "BOSS";
+    const phase = state.bossPhase ?? 1;
+    const barW = Math.min(w * 0.58, 520);
+    const bx = (w - barW) / 2;
+    const by = h - 44;
+
+    // Fondo semitransparente
+    ctx.fillStyle = "rgba(2,3,8,0.7)";
+    ctx.fillRect(bx - 10, by - 20, barW + 20, 34);
+
+    // Nombre + fase
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.font = "700 11px 'Orbitron', sans-serif";
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 8;
+    ctx.fillText(`── ${name}  ◆  PHASE ${phase} ──`, w / 2, by - 16);
+    ctx.shadowBlur = 0;
+
+    // Barra de HP
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.fillRect(bx, by, barW, 8);
+
+    const ratio = (state.bossMaxHp ?? 1) > 0 ? (state.bossHp ?? 0) / state.bossMaxHp! : 0;
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 12;
+    ctx.fillRect(bx, by, barW * ratio, 8);
+    ctx.shadowBlur = 0;
+
+    // Marcadores de fase (67% y 33%)
+    for (const pct of [0.67, 0.33]) {
+      ctx.fillStyle = "rgba(255,255,255,0.25)";
+      ctx.fillRect(bx + barW * pct - 1, by - 2, 2, 12);
+    }
   }
 }

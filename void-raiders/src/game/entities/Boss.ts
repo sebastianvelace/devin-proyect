@@ -22,7 +22,6 @@ export class Boss {
   /** Se pone a true el frame en que cambia de fase — GameScene lo usa para efectos. */
   phaseJustChanged = false;
 
-  private readonly level: number;
   private time = 0;
   private introTimer = INTRO_DURATION;
   private prevPhase = 1;
@@ -31,7 +30,6 @@ export class Boss {
 
   constructor(x: number, _y: number, level: number) {
     this.x = x;
-    this.level = level;
     this.maxHp = 80 + (level - 1) * 60;
     this.hp = this.maxHp;
     this.points = 2000 * level;

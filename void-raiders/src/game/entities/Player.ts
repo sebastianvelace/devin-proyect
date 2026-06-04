@@ -72,6 +72,9 @@ export class Player {
     this.x += this.vx * dt;
     this.y += this.vy * dt;
 
+    // cancela velocidad al tocar el borde — evita la sensación de "pegarse"
+    if ((this.x <= this.radius && this.vx < 0) || (this.x >= width - this.radius && this.vx > 0)) this.vx = 0;
+    if ((this.y <= this.radius && this.vy < 0) || (this.y >= height - this.radius && this.vy > 0)) this.vy = 0;
     this.x = clamp(this.x, this.radius, width - this.radius);
     this.y = clamp(this.y, this.radius, height - this.radius);
 
