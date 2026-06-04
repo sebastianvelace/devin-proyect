@@ -1,6 +1,7 @@
 // Game loop principal (requestAnimationFrame, delta time, scene manager)
 
 import type { ClickEvent, Scene, Vec2 } from "../types";
+import { InputManager } from "./systems/InputManager";
 
 const MAX_DT = 1 / 30; // cap para evitar saltos tras pestaña inactiva
 
@@ -21,6 +22,8 @@ export class Game {
   /** Posición del puntero en coordenadas lógicas. */
   readonly pointer: Vec2 = { x: 0, y: 0 };
   pointerDown = false;
+
+  readonly input = new InputManager();
 
   private scene: Scene | null = null;
   private clicks: ClickEvent[] = [];
@@ -79,6 +82,7 @@ export class Game {
       this.scene.update(dt);
       this.scene.render(ctx);
     }
+    this.input.endFrame();
     this.clicks.length = 0; // los clicks se consumen por frame
     this.rafId = requestAnimationFrame(this.tick);
   };

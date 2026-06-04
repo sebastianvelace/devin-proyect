@@ -2,13 +2,8 @@
 
 import type { Scene } from "../../types";
 import type { Game } from "../Game";
-
-interface Star {
-  x: number;
-  y: number;
-  z: number; // capa de profundidad 0..1 (mayor = más cercana/rápida)
-  size: number;
-}
+import { Starfield } from "../systems/Starfield";
+import { GameScene } from "./GameScene";
 
 interface Button {
   label: string;
@@ -21,10 +16,9 @@ interface Button {
 }
 
 const CYAN = "#00ffff";
-const STAR_LAYERS = 3;
 
 export class MenuScene implements Scene {
-  private stars: Star[] = [];
+  private readonly starfield = new Starfield(1);
   private buttons: Button[] = [];
   private time = 0;
   private micState: "off" | "requesting" | "ready" | "denied" = "off";
@@ -37,27 +31,13 @@ export class MenuScene implements Scene {
   }
 
   enter(): void {
-    this.spawnStars();
+    this.starfield.resize(this.game.width, this.game.height);
     this.buildButtons();
   }
 
   resize(): void {
-    this.spawnStars();
+    this.starfield.resize(this.game.width, this.game.height);
     this.buildButtons();
-  }
-
-  private spawnStars(): void {
-    const count = Math.floor((this.game.width * this.game.height) / 6000);
-    this.stars = [];
-    for (let i = 0; i < count; i++) {
-      const z = (Math.floor(Math.random() * STAR_LAYERS) + 1) / STAR_LAYERS;
-      this.stars.push({
-        x: Math.random() * this.game.width,
-        y: Math.random() * this.game.height,
-        z,
-        size: z * 1.8,
-      });
-    }
   }
 
   private buildButtons(): void {
@@ -99,9 +79,7 @@ export class MenuScene implements Scene {
   }
 
   private launch(): void {
-    // GameScene se conecta en la Etapa 2.
-    this.showToast("INICIANDO MISIÓN... (gameplay en Etapa 2)");
-    console.info("[VOID RAIDERS] LAUNCH MISSION");
+    this.game.changeScene(new GameScene(this.game));
   }
 
   private async enableMic(): Promise<void> {
@@ -129,14 +107,7 @@ export class MenuScene implements Scene {
     this.time += dt;
     if (this.toastTimer > 0) this.toastTimer -= dt;
 
-    // movimiento del starfield (parallax por capa)
-    for (const s of this.stars) {
-      s.y += s.z * 14 * dt * 60 * 0.016;
-      if (s.y > this.game.height) {
-        s.y = 0;
-        s.x = Math.random() * this.game.width;
-      }
-    }
+    this.starfield.update(dt);
 
     // clicks sobre botones
     for (const click of this.game.consumeClicks()) {
@@ -176,12 +147,7 @@ export class MenuScene implements Scene {
     // leve parallax con el puntero
     const px = (this.game.pointer.x / this.game.width - 0.5) * 20;
     const py = (this.game.pointer.y / this.game.height - 0.5) * 20;
-    for (const s of this.stars) {
-      ctx.globalAlpha = 0.3 + s.z * 0.7;
-      ctx.fillStyle = "#cfe8ff";
-      ctx.fillRect(s.x + px * s.z, s.y + py * s.z, s.size, s.size);
-    }
-    ctx.globalAlpha = 1;
+    this.starfield.render(ctx, px, py);
   }
 
   private renderShip(ctx: CanvasRenderingContext2D, x: number, y: number): void {
