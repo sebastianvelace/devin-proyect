@@ -42,7 +42,7 @@ export interface HudButtonRect {
 }
 
 export class HUD {
-  restartButtonRect(w: number, h: number, hasBoss: boolean): HudButtonRect {
+  restartButtonRect(_w: number, h: number, hasBoss: boolean): HudButtonRect {
     return { x: 18, y: hasBoss ? h - 78 : h - 34, w: 130, h: 26 };
   }
 

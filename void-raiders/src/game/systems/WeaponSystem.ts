@@ -27,7 +27,7 @@ export const WEAPONS: Record<WeaponType, WeaponDef> = {
   // Doble disparo guiado (homing). Ámbar. Daño medio-alto.
   missiles: {
     color: "#e08030", cooldown: 0.42, damage: 2,
-    speed: 500, radius: 4, maxAmmo: 12, reloadTime: 4,
+    speed: 500, radius: 4, maxAmmo: 2, reloadTime: 3.2,
   },
   // ── 3 · PLASMA ────────────────────────────────────────────────────────────
   // Bola lenta y grande, atraviesa enemigos (piercing). Violeta.
@@ -173,7 +173,8 @@ export class WeaponSystem {
       }
     }
 
-    if (mods.multishot) {
+    // Multishot adds side shots; missiles stay a fixed homing pair of 2.
+    if (mods.multishot && this.current !== "missiles") {
       spawn(angle - 0.28);
       spawn(angle + 0.28);
     }

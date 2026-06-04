@@ -286,7 +286,6 @@ export class MenuScene implements Scene {
     const p = this.game.pointer;
     for (const b of this.buttons) {
       const hover = p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
-      const accent = b.primary ? AMBER : ICE;
       const tx = b.x + b.w / 2;
       const ty = b.y + b.h / 2 + 1;
 
@@ -339,27 +338,39 @@ export class MenuScene implements Scene {
       "Teclas 1–6 cambian el arma · espacio lanza bomba",
       "Destruye oleadas y derrota al jefe de cada nivel",
     ];
+    const title = "Cómo jugar";
+    const titleY = y - 56;
 
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    const ruleW = 48;
-    ctx.strokeStyle = DIM_DARK + "88";
+    ctx.font = `500 34px ${FONT_DISPLAY}`;
+    ctx.letterSpacing = "2px";
+    ctx.fillStyle = WARM_W;
+    ctx.fillText(title, x, titleY);
+
+    const titleW = ctx.measureText(title).width;
+    const ruleGap = 14;
+    const ruleLen = 36;
+    ctx.strokeStyle = AMBER + "77";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(x - ruleW, y - 58);
-    ctx.lineTo(x + ruleW, y - 58);
+    ctx.moveTo(x - titleW / 2 - ruleGap - ruleLen, titleY);
+    ctx.lineTo(x - titleW / 2 - ruleGap, titleY);
+    ctx.moveTo(x + titleW / 2 + ruleGap, titleY);
+    ctx.lineTo(x + titleW / 2 + ruleGap + ruleLen, titleY);
     ctx.stroke();
 
-    ctx.font = `400 11px ${FONT_UI}`;
-    ctx.letterSpacing = "2px";
-    ctx.fillStyle = DIM;
-    ctx.fillText("cómo jugar", x, y - 42);
+    ctx.strokeStyle = AMBER + "44";
+    ctx.beginPath();
+    ctx.moveTo(x - titleW / 2, titleY + 18);
+    ctx.lineTo(x + titleW / 2, titleY + 18);
+    ctx.stroke();
 
     ctx.font = `300 13px ${FONT_UI}`;
     ctx.letterSpacing = "0.2px";
-    let lineY = y - 14;
+    let lineY = y - 6;
     for (const line of lines) {
       ctx.fillStyle = DIM + "dd";
       ctx.fillText(line, x, lineY);
