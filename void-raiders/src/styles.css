@@ -1,1 +1,37 @@
 /* Estilos globales, Google Fonts, animaciones CSS, HUD overlay */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #0a0a0f;
+  color: #e6f1ff;
+  font-family: "Exo 2", system-ui, sans-serif;
+}
+
+#app {
+  width: 100vw;
+  height: 100vh;
+}
+
+#game-canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+/* evita selección de texto accidental durante el juego */
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
