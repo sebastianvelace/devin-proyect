@@ -5,7 +5,7 @@ export interface Vec2 {
   y: number;
 }
 
-export type WeaponType = "laser" | "missiles" | "plasma" | "burst";
+export type WeaponType = "laser" | "missiles" | "plasma" | "burst" | "railgun" | "flak";
 export type EnemyType = "basic" | "fast" | "tank" | "sniper" | "bomber";
 export type PowerUpType = "multishot" | "shield" | "speed" | "damage" | "bomb";
 
