@@ -34,8 +34,24 @@ const ICE    = "#80c8ff";
 const DIM    = "#667788";
 const WARM_W = "#f0e8d0";
 
+export interface HudButtonRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export class HUD {
-  render(ctx: CanvasRenderingContext2D, w: number, h: number, state: HudState): void {
+  restartButtonRect(w: number, h: number, hasBoss: boolean): HudButtonRect {
+    return { x: 18, y: hasBoss ? h - 78 : h - 34, w: 130, h: 26 };
+  }
+
+  hitRestartButton(px: number, py: number, w: number, h: number, hasBoss: boolean): boolean {
+    const r = this.restartButtonRect(w, h, hasBoss);
+    return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
+  }
+
+  render(ctx: CanvasRenderingContext2D, w: number, h: number, state: HudState, restartHover = false): void {
     ctx.save();
 
     this.renderTopBar(ctx, w, state);
@@ -55,7 +71,44 @@ export class HUD {
       this.renderBossBar(ctx, w, h, state);
     }
 
+    this.renderRestartButton(ctx, w, h, !!state.bossHp, restartHover);
+
     ctx.restore();
+  }
+
+  private renderRestartButton(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+    hasBoss: boolean,
+    hover: boolean,
+  ): void {
+    const r = this.restartButtonRect(w, h, hasBoss);
+    const label = "↻  REINICIAR NIVEL";
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.font = hover
+      ? "600 11px 'JetBrains Mono', monospace"
+      : "500 11px 'JetBrains Mono', monospace";
+    ctx.letterSpacing = "1px";
+    ctx.fillStyle = hover ? WARM_W : DIM;
+    if (hover) {
+      ctx.shadowColor = AMBER;
+      ctx.shadowBlur = 6;
+    }
+    ctx.fillText(label, r.x, r.y + r.h / 2);
+    ctx.shadowBlur = 0;
+
+    if (hover) {
+      const tw = ctx.measureText(label).width;
+      ctx.strokeStyle = AMBER + "99";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(r.x, r.y + r.h - 2);
+      ctx.lineTo(r.x + tw, r.y + r.h - 2);
+      ctx.stroke();
+    }
   }
 
   private renderBuff(ctx: CanvasRenderingContext2D, w: number, label: string, timer: number): void {

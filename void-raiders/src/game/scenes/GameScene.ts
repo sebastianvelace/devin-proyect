@@ -79,6 +79,8 @@ export class GameScene implements Scene {
     laser: 0, missiles: 0, plasma: 0, burst: 0, railgun: 0, flak: 0,
   };
 
+  private restartHover = false;
+
   constructor(game: Game, level = 1) {
     this.game = game;
     this.level = level;
@@ -99,6 +101,11 @@ export class GameScene implements Scene {
 
   resize(width: number, height: number): void {
     this.starfield.resize(width, height);
+  }
+
+  private restartLevel(): void {
+    soundManager.play("ui_click");
+    this.game.changeScene(new GameScene(this.game, this.level));
   }
 
   update(dt: number): void {
@@ -122,6 +129,26 @@ export class GameScene implements Scene {
 
     if (input.wasPressed("KeyM")) {
       soundManager.toggleMute();
+    }
+
+    if (input.wasPressed("KeyR")) {
+      this.restartLevel();
+      return;
+    }
+
+    const hasBoss = this.boss !== null;
+    const p = this.game.pointer;
+    const restartHit = this.hud.hitRestartButton(p.x, p.y, this.game.width, this.game.height, hasBoss);
+    if (restartHit && !this.restartHover) {
+      soundManager.playHover();
+    }
+    this.restartHover = restartHit;
+
+    for (const click of this.game.consumeClicks()) {
+      if (this.hud.hitRestartButton(click.x, click.y, this.game.width, this.game.height, hasBoss)) {
+        this.restartLevel();
+        return;
+      }
     }
 
     for (const code in WEAPON_KEYS) {
@@ -524,7 +551,7 @@ export class GameScene implements Scene {
         bossColor: this.boss.color,
         bossName:  BOSS_NAMES[(this.level - 1) % BOSS_NAMES.length],
       } : {}),
-    });
+    }, this.restartHover);
 
     if (this.comboFlash > 0 && this.multiplier > 1) this.renderComboFlash(ctx, w, h);
     this.renderVignette(ctx, w, h);
