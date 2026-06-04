@@ -146,47 +146,94 @@ export class Player {
       ctx.globalAlpha = 1;
     }
 
-    // Destello del motor posterior
-    const flicker = 0.7 + Math.sin(this.engineFlicker) * 0.3;
-    ctx.globalAlpha = flicker * 0.85;
-    ctx.fillStyle = SHIP_GLOW;
-    ctx.shadowColor = SHIP_GLOW;
-    ctx.shadowBlur = 18;
-    ctx.beginPath();
-    ctx.moveTo(-12, -4);
-    ctx.lineTo(-20, 0);
-    ctx.lineTo(-12, 4);
-    ctx.closePath();
-    ctx.fill();
-    ctx.globalAlpha = 1;
-
-    // Cuerpo de la nave
+    const flicker = 0.65 + Math.sin(this.engineFlicker) * 0.35;
     const fillColor = this.invuln > 0 ? DAMAGE_COL : SHIP_FILL;
     const glowColor = this.invuln > 0 ? "#ff6060" : SHIP_GLOW;
+    const hullShadow = this.invuln > 0 ? "#801820" : "#3a3428";
+
+    // Motores gemelos — estela corta y simétrica
+    for (const ey of [-4.5, 4.5]) {
+      ctx.globalAlpha = flicker * 0.8;
+      ctx.fillStyle = glowColor;
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = 16;
+      const tail = -18 - flicker * 4;
+      ctx.beginPath();
+      ctx.moveTo(-10, ey - 1.6);
+      ctx.lineTo(tail, ey);
+      ctx.lineTo(-10, ey + 1.6);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Interceptor: fuselaje alargado + alas en flecha
     ctx.shadowColor = glowColor;
-    ctx.shadowBlur = 20;
+    ctx.shadowBlur = 18;
     ctx.fillStyle = fillColor;
     ctx.beginPath();
-    ctx.moveTo(18, 0);
-    ctx.lineTo(-13, -11);
-    ctx.lineTo(-7, 0);
-    ctx.lineTo(-13, 11);
+    ctx.moveTo(20, 0);
+    ctx.lineTo(7, -3.2);
+    ctx.lineTo(-1, -11.5);
+    ctx.lineTo(-8.5, -7.5);
+    ctx.lineTo(-13.5, -5.2);
+    ctx.lineTo(-15.5, -1.8);
+    ctx.lineTo(-13, 0);
+    ctx.lineTo(-15.5, 1.8);
+    ctx.lineTo(-13.5, 5.2);
+    ctx.lineTo(-8.5, 7.5);
+    ctx.lineTo(-1, 11.5);
+    ctx.lineTo(7, 3.2);
     ctx.closePath();
     ctx.fill();
 
-    // Líneas de acento ámbar
+    // Cabina — cuña oscura sobre el morro
+    ctx.globalAlpha = 0.38;
+    ctx.fillStyle = hullShadow;
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.moveTo(15, 0);
+    ctx.lineTo(6, -2.2);
+    ctx.lineTo(6, 2.2);
+    ctx.closePath();
+    ctx.fill();
+
+    // Paneles de acento ámbar
     if (this.invuln <= 0) {
       ctx.strokeStyle = SHIP_GLOW;
-      ctx.lineWidth = 1.2;
-      ctx.shadowBlur = 6;
-      ctx.globalAlpha = 0.6;
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.55;
+      ctx.shadowBlur = 5;
       ctx.beginPath();
-      ctx.moveTo(8, -5); ctx.lineTo(-8, -7);
+      ctx.moveTo(11, -2.5);
+      ctx.lineTo(-5, -6.5);
       ctx.stroke();
       ctx.beginPath();
-      ctx.moveTo(8, 5); ctx.lineTo(-8, 7);
+      ctx.moveTo(11, 2.5);
+      ctx.lineTo(-5, 6.5);
       ctx.stroke();
     }
+
+    // Contorno sutil — legible sobre fondo oscuro
+    ctx.strokeStyle = hullShadow;
+    ctx.lineWidth = 0.9;
+    ctx.globalAlpha = 0.45;
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.moveTo(20, 0);
+    ctx.lineTo(7, -3.2);
+    ctx.lineTo(-1, -11.5);
+    ctx.lineTo(-8.5, -7.5);
+    ctx.lineTo(-13.5, -5.2);
+    ctx.lineTo(-15.5, -1.8);
+    ctx.lineTo(-13, 0);
+    ctx.lineTo(-15.5, 1.8);
+    ctx.lineTo(-13.5, 5.2);
+    ctx.lineTo(-8.5, 7.5);
+    ctx.lineTo(-1, 11.5);
+    ctx.lineTo(7, 3.2);
+    ctx.closePath();
+    ctx.stroke();
 
     ctx.restore();
     ctx.globalAlpha = 1;

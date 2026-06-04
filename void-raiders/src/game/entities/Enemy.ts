@@ -51,6 +51,7 @@ export class Enemy {
   private phase = 0; // para zigzag/sine
   private anchorY = 0; // línea de combate (objetivo vertical)
   private homeX = 0; // centro de patrulla horizontal
+  private facingAngle = Math.PI / 2;
 
   spawn(type: EnemyType, x: number, y: number, anchorY: number): void {
     const s = ENEMY_STATS[type];
@@ -90,6 +91,7 @@ export class Enemy {
   update(dt: number, player: Player, bullets: Pool<Bullet>, width: number): void {
     this.phase += dt;
     const ang = Math.atan2(player.y - this.y, player.x - this.x);
+    this.facingAngle = ang;
 
     switch (this.type) {
       case "basic":
@@ -187,58 +189,37 @@ export class Enemy {
   render(ctx: CanvasRenderingContext2D): void {
     ctx.save();
     ctx.translate(this.x, this.y);
-    ctx.shadowColor = this.color;
-    ctx.shadowBlur = 14;
-    ctx.fillStyle = this.color;
-    ctx.strokeStyle = this.color;
-    ctx.lineWidth = 2;
+    ctx.rotate(this.facingAngle - Math.PI / 2);
+
     const r = this.radius;
+    const accent = this.color;
+    const hull = this.darken(accent, 0.55);
+    const glow = this.lighten(accent, 0.25);
+
+    ctx.shadowColor = accent;
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = accent;
+    ctx.strokeStyle = hull;
+    ctx.lineWidth = 1.1;
 
     switch (this.type) {
-      case "basic": // rombo
-        ctx.beginPath();
-        ctx.moveTo(0, -r);
-        ctx.lineTo(r, 0);
-        ctx.lineTo(0, r);
-        ctx.lineTo(-r, 0);
-        ctx.closePath();
-        ctx.fill();
+      case "basic":
+        this.drawBasicFighter(ctx, r, accent, hull, glow);
         break;
-      case "fast": // triángulo pequeño
-        ctx.beginPath();
-        ctx.moveTo(0, r);
-        ctx.lineTo(r, -r);
-        ctx.lineTo(-r, -r);
-        ctx.closePath();
-        ctx.fill();
+      case "fast":
+        this.drawInterceptor(ctx, r, accent, hull, glow);
         break;
-      case "tank": // hexágono
-        ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-          const a = (i / 6) * TAU;
-          const px = Math.cos(a) * r;
-          const py = Math.sin(a) * r;
-          if (i === 0) ctx.moveTo(px, py);
-          else ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-        ctx.fill();
+      case "tank":
+        this.drawGunship(ctx, r, accent, hull, glow);
         break;
-      case "sniper": // línea delgada
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(-r, 0);
-        ctx.lineTo(r, 0);
-        ctx.stroke();
+      case "sniper":
+        this.drawSniperNeedle(ctx, r, accent, hull, glow);
         break;
-      case "bomber": // círculo
-        ctx.beginPath();
-        ctx.arc(0, 0, r, 0, TAU);
-        ctx.fill();
+      case "bomber":
+        this.drawBomber(ctx, r, accent, hull, glow);
         break;
     }
 
-    // indicador de daño (anillo de vida para enemigos con hp>1)
     if (this.maxHp > 1 && this.hp < this.maxHp) {
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 0.8;
@@ -249,5 +230,214 @@ export class Enemy {
       ctx.stroke();
     }
     ctx.restore();
+  }
+
+  /** Caza estándar — alas en flecha, morro afilado. */
+  private drawBasicFighter(
+    ctx: CanvasRenderingContext2D,
+    r: number,
+    fill: string,
+    hull: string,
+    glow: string,
+  ): void {
+    this.drawEnginePlume(ctx, r, -0.82, glow, 0.7, 1);
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.moveTo(0, r);
+    ctx.lineTo(-0.78 * r, 0.18 * r);
+    ctx.lineTo(-0.58 * r, -0.62 * r);
+    ctx.lineTo(0, -0.88 * r);
+    ctx.lineTo(0.58 * r, -0.62 * r);
+    ctx.lineTo(0.78 * r, 0.18 * r);
+    ctx.closePath();
+    ctx.fill();
+    this.outlinePath(ctx, hull, 0.5);
+    ctx.globalAlpha = 0.42;
+    ctx.fillStyle = hull;
+    ctx.beginPath();
+    ctx.moveTo(0, 0.72 * r);
+    ctx.lineTo(-0.18 * r, 0.28 * r);
+    ctx.lineTo(0.18 * r, 0.28 * r);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  /** Interceptor — delta estrecha, motor único brillante. */
+  private drawInterceptor(
+    ctx: CanvasRenderingContext2D,
+    r: number,
+    fill: string,
+    hull: string,
+    glow: string,
+  ): void {
+    this.drawEnginePlume(ctx, r, -0.72, glow, 0.85, 0.75);
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.moveTo(0, r);
+    ctx.lineTo(-0.42 * r, -0.22 * r);
+    ctx.lineTo(-0.1 * r, -0.78 * r);
+    ctx.lineTo(0.1 * r, -0.78 * r);
+    ctx.lineTo(0.42 * r, -0.22 * r);
+    ctx.closePath();
+    ctx.fill();
+    this.outlinePath(ctx, hull, 0.55);
+    ctx.strokeStyle = glow;
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.65;
+    ctx.beginPath();
+    ctx.moveTo(0, 0.55 * r);
+    ctx.lineTo(0, -0.45 * r);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  /** Cañonera pesada — fuselaje ancho, torretas laterales. */
+  private drawGunship(
+    ctx: CanvasRenderingContext2D,
+    r: number,
+    fill: string,
+    hull: string,
+    glow: string,
+  ): void {
+    for (const sx of [-0.72, 0.72]) {
+      this.drawEnginePlume(ctx, r, -0.78, glow, 0.55, 0.55, sx * r);
+    }
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.moveTo(0, r);
+    ctx.lineTo(-0.95 * r, 0.42 * r);
+    ctx.lineTo(-0.95 * r, -0.18 * r);
+    ctx.lineTo(-0.55 * r, -0.82 * r);
+    ctx.lineTo(0.55 * r, -0.82 * r);
+    ctx.lineTo(0.95 * r, -0.18 * r);
+    ctx.lineTo(0.95 * r, 0.42 * r);
+    ctx.closePath();
+    ctx.fill();
+    this.outlinePath(ctx, hull, 0.45);
+    ctx.fillStyle = hull;
+    ctx.globalAlpha = 0.5;
+    ctx.fillRect(-0.22 * r, -0.35 * r, 0.44 * r, 0.55 * r);
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(-0.62 * r, 0.08 * r, 0.14 * r, 0, TAU);
+    ctx.arc(0.62 * r, 0.08 * r, 0.14 * r, 0, TAU);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  /** Francotirador — aguja larga con estabilizadores. */
+  private drawSniperNeedle(
+    ctx: CanvasRenderingContext2D,
+    r: number,
+    fill: string,
+    hull: string,
+    glow: string,
+  ): void {
+    this.drawEnginePlume(ctx, r, -0.92, glow, 0.6, 0.65);
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.moveTo(0, r);
+    ctx.lineTo(-0.14 * r, 0.48 * r);
+    ctx.lineTo(-0.14 * r, -0.12 * r);
+    ctx.lineTo(-0.38 * r, -0.22 * r);
+    ctx.lineTo(-0.14 * r, -0.58 * r);
+    ctx.lineTo(0, -0.95 * r);
+    ctx.lineTo(0.14 * r, -0.58 * r);
+    ctx.lineTo(0.38 * r, -0.22 * r);
+    ctx.lineTo(0.14 * r, -0.12 * r);
+    ctx.lineTo(0.14 * r, 0.48 * r);
+    ctx.closePath();
+    ctx.fill();
+    this.outlinePath(ctx, hull, 0.55);
+    ctx.fillStyle = glow;
+    ctx.globalAlpha = 0.75;
+    ctx.beginPath();
+    ctx.arc(0, 0.78 * r, 0.12 * r, 0, TAU);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  /** Bombardero — cuerpo robusto, bahía central, motores en las alas. */
+  private drawBomber(
+    ctx: CanvasRenderingContext2D,
+    r: number,
+    fill: string,
+    hull: string,
+    glow: string,
+  ): void {
+    for (const sx of [-0.62, 0.62]) {
+      this.drawEnginePlume(ctx, r, -0.68, glow, 0.65, 0.6, sx * r);
+    }
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.moveTo(0, r);
+    ctx.lineTo(-0.68 * r, 0.52 * r);
+    ctx.lineTo(-0.82 * r, 0.05 * r);
+    ctx.lineTo(-0.62 * r, -0.48 * r);
+    ctx.lineTo(-0.32 * r, -0.72 * r);
+    ctx.lineTo(0.32 * r, -0.72 * r);
+    ctx.lineTo(0.62 * r, -0.48 * r);
+    ctx.lineTo(0.82 * r, 0.05 * r);
+    ctx.lineTo(0.68 * r, 0.52 * r);
+    ctx.closePath();
+    ctx.fill();
+    this.outlinePath(ctx, hull, 0.48);
+    ctx.fillStyle = hull;
+    ctx.globalAlpha = 0.55;
+    ctx.beginPath();
+    ctx.ellipse(0, 0.15 * r, 0.22 * r, 0.32 * r, 0, 0, TAU);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  private drawEnginePlume(
+    ctx: CanvasRenderingContext2D,
+    r: number,
+    back: number,
+    glow: string,
+    alpha: number,
+    scale: number,
+    offsetX = 0,
+  ): void {
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = glow;
+    ctx.shadowColor = glow;
+    ctx.shadowBlur = 12;
+    const y0 = back * r;
+    const len = 0.28 * r * scale;
+    ctx.beginPath();
+    ctx.moveTo(offsetX - 0.12 * r, y0);
+    ctx.lineTo(offsetX, y0 - len);
+    ctx.lineTo(offsetX + 0.12 * r, y0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  private outlinePath(ctx: CanvasRenderingContext2D, hull: string, alpha: number): void {
+    ctx.strokeStyle = hull;
+    ctx.lineWidth = 0.9;
+    ctx.globalAlpha = alpha;
+    ctx.shadowBlur = 0;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  private darken(hex: string, amt: number): string {
+    const n = parseInt(hex.slice(1), 16);
+    const r = Math.max(0, ((n >> 16) & 255) * (1 - amt)) | 0;
+    const g = Math.max(0, ((n >> 8) & 255) * (1 - amt)) | 0;
+    const b = Math.max(0, (n & 255) * (1 - amt)) | 0;
+    return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
+  }
+
+  private lighten(hex: string, amt: number): string {
+    const n = parseInt(hex.slice(1), 16);
+    const r = Math.min(255, ((n >> 16) & 255) + (255 - ((n >> 16) & 255)) * amt) | 0;
+    const g = Math.min(255, ((n >> 8) & 255) + (255 - ((n >> 8) & 255)) * amt) | 0;
+    const b = Math.min(255, (n & 255) + (255 - (n & 255)) * amt) | 0;
+    return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
   }
 }

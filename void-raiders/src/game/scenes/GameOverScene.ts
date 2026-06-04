@@ -23,17 +23,19 @@ export class GameOverScene implements Scene {
   private readonly starfield = new Starfield(0.5);
   private readonly game: Game;
   private readonly score: number;
+  private readonly level: number;
   private time = 0;
   private buttons: Button[] = [];
 
-  constructor(game: Game, score: number) {
+  constructor(game: Game, score: number, level = 1) {
     this.game = game;
     this.score = score;
+    this.level = level;
   }
 
   enter(): void {
     soundManager.init();
-    soundManager.play('player_hit');
+    soundManager.play("defeat");
     this.starfield.resize(this.game.width, this.game.height);
     this.buildButtons();
   }
@@ -54,7 +56,7 @@ export class GameOverScene implements Scene {
 
   private retry(): void {
     soundManager.play('ui_click');
-    this.game.changeScene(new GameScene(this.game));
+    this.game.changeScene(new GameScene(this.game, this.level));
   }
 
   private menu(): void {
@@ -72,8 +74,12 @@ export class GameOverScene implements Scene {
         }
       }
     }
-    if (this.game.input.wasPressed("Escape")) this.menu();
-    if (this.game.input.wasPressed("KeyR"))   this.retry();
+    if (this.game.input.wasPressed("KeyM")) soundManager.toggleMute();
+    if (this.game.input.wasPressed("Escape")) {
+      soundManager.play("menu_back");
+      this.menu();
+    }
+    if (this.game.input.wasPressed("KeyR")) this.retry();
   }
 
   render(ctx: CanvasRenderingContext2D): void {

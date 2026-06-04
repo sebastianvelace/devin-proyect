@@ -18,6 +18,9 @@ export interface HudState {
   maxAmmo: number;
   isReloading: boolean;
   reloadProgress: number; // 0..1
+  bombs?: number;
+  buffLabel?: string;
+  buffTimer?: number;
   // boss (opcionales)
   bossHp?: number;
   bossMaxHp?: number;
@@ -41,11 +44,40 @@ export class HUD {
     this.renderAmmo(ctx, state);
     this.renderLevelInfo(ctx, w, state);
 
+    if (state.buffLabel && state.buffTimer !== undefined && state.buffTimer > 0) {
+      this.renderBuff(ctx, w, state.buffLabel, state.buffTimer);
+    }
+    if (state.bombs !== undefined && state.bombs > 0) {
+      this.renderBombs(ctx, w, state.bombs);
+    }
+
     if (state.bossHp !== undefined && state.bossMaxHp !== undefined) {
       this.renderBossBar(ctx, w, h, state);
     }
 
     ctx.restore();
+  }
+
+  private renderBuff(ctx: CanvasRenderingContext2D, w: number, label: string, timer: number): void {
+    ctx.textAlign = "right";
+    ctx.textBaseline = "bottom";
+    ctx.font = "600 11px 'JetBrains Mono', monospace";
+    ctx.fillStyle = AMBER;
+    ctx.shadowColor = AMBER;
+    ctx.shadowBlur = 6;
+    ctx.fillText(`${label}  ${timer.toFixed(1)}s`, w - 18, 58);
+    ctx.shadowBlur = 0;
+  }
+
+  private renderBombs(ctx: CanvasRenderingContext2D, w: number, count: number): void {
+    ctx.textAlign = "right";
+    ctx.textBaseline = "bottom";
+    ctx.font = "700 12px 'Orbitron', sans-serif";
+    ctx.fillStyle = "#f0f0f0";
+    ctx.shadowColor = "#ffffff";
+    ctx.shadowBlur = 8;
+    ctx.fillText(`BOMB ×${count}  [SPACE]`, w - 18, 76);
+    ctx.shadowBlur = 0;
   }
 
   private renderTopBar(ctx: CanvasRenderingContext2D, w: number, state: HudState): void {

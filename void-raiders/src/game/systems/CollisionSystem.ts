@@ -3,6 +3,7 @@
 import type { Bullet } from "../entities/Bullet";
 import type { Enemy } from "../entities/Enemy";
 import type { Player } from "../entities/Player";
+import type { PowerUp } from "../entities/PowerUp";
 import type { Pool } from "../../utils/pool";
 import { distanceSq } from "../../utils/math";
 
@@ -62,6 +63,22 @@ export class CollisionSystem {
       if (overlap(b.x, b.y, b.radius, cx, cy, cr)) {
         onHit(b);
         if (!b.piercing) b.alive = false;
+      }
+    }
+  }
+
+  /** Power-up vs jugador. */
+  powerUpsVsPlayer(
+    powerUps: readonly PowerUp[],
+    player: Player,
+    onCollect: (pu: PowerUp) => void,
+  ): void {
+    if (!player.alive) return;
+    for (const pu of powerUps) {
+      if (!pu.alive) continue;
+      if (overlap(pu.x, pu.y, pu.radius, player.x, player.y, player.radius)) {
+        onCollect(pu);
+        pu.alive = false;
       }
     }
   }

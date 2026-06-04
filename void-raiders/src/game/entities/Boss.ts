@@ -1,9 +1,12 @@
-// Boss final con 3 fases: patrulla + spread, aimed shots, espiral
+// Boss final con 3 fases: patrulla + spread, aimed shots, espiral + minions
 
+import type { EnemyType } from "../../types";
 import type { Player } from "./Player";
 import type { Bullet } from "./Bullet";
 import type { Pool } from "../../utils/pool";
 import { TAU, vecFromAngle } from "../../utils/math";
+
+export const BOSS_MINION_CAP = 6;
 
 const PHASE_THRESHOLDS = [0.67, 0.33];
 const INTRO_DURATION = 2.2; // segundos de entrada dramática desde arriba
@@ -27,6 +30,7 @@ export class Boss {
   private prevPhase = 1;
   // fireTimers[0]=spread, [1]=aimed, [2]=spiral — arranca con delay inicial
   private readonly fireTimers = [1.8, 1.2, 0.0];
+  private minionTimer = 3;
 
   constructor(x: number, _y: number, level: number) {
     this.x = x;
@@ -124,56 +128,120 @@ export class Boss {
     }
   }
 
+  /** Tipos de minion a spawnear este tick (vacío si no toca o está en intro). */
+  pollMinionSpawns(dt: number): EnemyType[] {
+    if (this.isIntro || !this.alive) return [];
+
+    const ph = this.phase;
+    const interval = ph === 1 ? 5 : ph === 2 ? 4 : 3;
+    this.minionTimer -= dt;
+    if (this.minionTimer > 0) return [];
+    this.minionTimer = interval;
+
+    if (ph === 1) return ["basic", "basic"];
+    if (ph === 2) return ["fast", "basic"];
+    return ["fast", "fast", "bomber"];
+  }
+
   render(ctx: CanvasRenderingContext2D): void {
     const ph = this.phase;
     const pulse = 0.85 + Math.sin(this.time * (3 + ph)) * 0.15;
+    const r = this.radius;
+    const hull = this.shade(this.color, -0.45);
+    const accent = this.shade(this.color, 0.22);
+    const flicker = 0.7 + Math.sin(this.time * 6) * 0.3;
 
     ctx.save();
     ctx.translate(this.x, this.y);
 
-    // Halo exterior
-    ctx.globalAlpha = 0.22 * pulse;
+    // Halo de amenaza
+    ctx.globalAlpha = 0.18 * pulse;
     ctx.shadowColor = this.color;
-    ctx.shadowBlur = 45;
+    ctx.shadowBlur = 40;
     ctx.strokeStyle = this.color;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.arc(0, 0, this.radius + 24, 0, TAU);
+    ctx.ellipse(0, 0, r + 22, r + 14, 0, 0, TAU);
     ctx.stroke();
 
-    // Hexágono principal giratorio
+    // Motores triples en popa (parte superior — boss mira hacia abajo)
+    for (const ex of [-0.42, 0, 0.42]) {
+      ctx.globalAlpha = flicker * 0.75;
+      ctx.fillStyle = accent;
+      ctx.shadowColor = accent;
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.moveTo(ex * r - 8, -0.78 * r);
+      ctx.lineTo(ex * r, -0.78 * r - 16 * flicker);
+      ctx.lineTo(ex * r + 8, -0.78 * r);
+      ctx.closePath();
+      ctx.fill();
+    }
     ctx.globalAlpha = 1;
+
+    // Crucero pesado — alas anchas, superestructura de mando
+    ctx.shadowColor = this.color;
     ctx.shadowBlur = 22 * pulse;
-    ctx.save();
-    ctx.rotate(this.time * (0.5 + (ph - 1) * 0.3));
     ctx.fillStyle = this.color;
     ctx.beginPath();
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * TAU;
-      if (i === 0) ctx.moveTo(Math.cos(a) * this.radius, Math.sin(a) * this.radius);
-      else ctx.lineTo(Math.cos(a) * this.radius, Math.sin(a) * this.radius);
-    }
+    ctx.moveTo(0, r);
+    ctx.lineTo(-0.92 * r, 0.38 * r);
+    ctx.lineTo(-0.98 * r, -0.12 * r);
+    ctx.lineTo(-0.55 * r, -0.62 * r);
+    ctx.lineTo(-0.22 * r, -0.88 * r);
+    ctx.lineTo(0.22 * r, -0.88 * r);
+    ctx.lineTo(0.55 * r, -0.62 * r);
+    ctx.lineTo(0.98 * r, -0.12 * r);
+    ctx.lineTo(0.92 * r, 0.38 * r);
     ctx.closePath();
     ctx.fill();
+
+    // Torre de mando
+    ctx.fillStyle = hull;
+    ctx.globalAlpha = 0.65;
+    ctx.beginPath();
+    ctx.moveTo(-0.18 * r, -0.55 * r);
+    ctx.lineTo(0.18 * r, -0.55 * r);
+    ctx.lineTo(0.14 * r, -0.82 * r);
+    ctx.lineTo(-0.14 * r, -0.82 * r);
+    ctx.closePath();
+    ctx.fill();
+
+    // Bahía de armas / ventral
+    ctx.globalAlpha = 0.35 + ph * 0.08;
+    ctx.fillStyle = accent;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.ellipse(0, 0.42 * r, 0.2 * r, 0.32 * r, 0, 0, TAU);
+    ctx.fill();
+
+    // Cañones laterales (giran levemente con la fase)
+    ctx.save();
+    ctx.rotate(Math.sin(this.time * 1.4) * 0.06);
+    ctx.fillStyle = hull;
+    ctx.globalAlpha = 0.85;
+    ctx.fillRect(-0.88 * r, 0.05 * r, 0.18 * r, 0.38 * r);
+    ctx.fillRect(0.7 * r, 0.05 * r, 0.18 * r, 0.38 * r);
     ctx.restore();
 
-    // Núcleo interno (gira en sentido contrario)
-    ctx.save();
-    ctx.rotate(-this.time * 1.1);
-    ctx.globalAlpha = 0.28 + ph * 0.1;
-    ctx.fillStyle = "#ffffff";
-    ctx.shadowColor = "#ffffff";
-    ctx.shadowBlur = 16;
-    const innerR = this.radius * 0.42;
+    // Contorno
+    ctx.strokeStyle = hull;
+    ctx.lineWidth = 1.2;
+    ctx.globalAlpha = 0.5;
+    ctx.shadowBlur = 0;
     ctx.beginPath();
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * TAU;
-      if (i === 0) ctx.moveTo(Math.cos(a) * innerR, Math.sin(a) * innerR);
-      else ctx.lineTo(Math.cos(a) * innerR, Math.sin(a) * innerR);
-    }
+    ctx.moveTo(0, r);
+    ctx.lineTo(-0.92 * r, 0.38 * r);
+    ctx.lineTo(-0.98 * r, -0.12 * r);
+    ctx.lineTo(-0.55 * r, -0.62 * r);
+    ctx.lineTo(-0.22 * r, -0.88 * r);
+    ctx.lineTo(0.22 * r, -0.88 * r);
+    ctx.lineTo(0.55 * r, -0.62 * r);
+    ctx.lineTo(0.98 * r, -0.12 * r);
+    ctx.lineTo(0.92 * r, 0.38 * r);
     ctx.closePath();
-    ctx.fill();
-    ctx.restore();
+    ctx.stroke();
+    ctx.globalAlpha = 1;
 
     ctx.restore();
 
@@ -188,5 +256,17 @@ export class Boss {
     ctx.shadowBlur = 8;
     ctx.fillRect(bx, by, barW * this.hpRatio, 5);
     ctx.shadowBlur = 0;
+  }
+
+  private shade(hex: string, amt: number): string {
+    const n = parseInt(hex.slice(1), 16);
+    const ch = (c: number) =>
+      amt >= 0
+        ? Math.min(255, c + (255 - c) * amt) | 0
+        : Math.max(0, c * (1 + amt)) | 0;
+    const r = ch((n >> 16) & 255);
+    const g = ch((n >> 8) & 255);
+    const b = ch(n & 255);
+    return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
   }
 }

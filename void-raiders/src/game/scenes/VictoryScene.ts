@@ -43,8 +43,7 @@ export class VictoryScene implements Scene {
 
   enter(): void {
     soundManager.init();
-    soundManager.play('combo');
-    setTimeout(() => soundManager.play('powerup'), 300);
+    soundManager.play("victory");
     this.starfield.resize(this.game.width, this.game.height);
     this.buildButtons();
   }
@@ -94,8 +93,12 @@ export class VictoryScene implements Scene {
         }
       }
     }
-    if (this.game.input.wasPressed("Escape")) this.menu();
-    if (this.game.input.wasPressed("KeyR"))   this.again();
+    if (this.game.input.wasPressed("KeyM")) soundManager.toggleMute();
+    if (this.game.input.wasPressed("Escape")) {
+      soundManager.play("menu_back");
+      this.menu();
+    }
+    if (this.game.input.wasPressed("KeyR")) this.again();
   }
 
   render(ctx: CanvasRenderingContext2D): void {
