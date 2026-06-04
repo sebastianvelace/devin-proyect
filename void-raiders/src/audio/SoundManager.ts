@@ -5,8 +5,14 @@
 
 const STORAGE_KEY = "void-raiders-audio";
 
+/** Volumen maestro por defecto (0–1). Solo aplica si no hay prefs en localStorage. */
+export const DEFAULT_MASTER_VOLUME = 0.75;
+
 /** Intensidad de la música épica (0–1). Ajustable en runtime vía setMusicVolume(). */
-export const DEFAULT_MUSIC_VOLUME = 0.42;
+export const DEFAULT_MUSIC_VOLUME = 0.38;
+
+/** Ganancia fija del bus SFX (no persistida — afecta a todos los usuarios). */
+const SFX_BUS_GAIN = 1.35;
 
 export type SoundId =
   | "shoot_laser"
@@ -57,7 +63,7 @@ export class SoundManager {
   private customMusicBuf: AudioBuffer | null = null;
   private ready = false;
   private muted = false;
-  private volume = 0.6;
+  private volume = DEFAULT_MASTER_VOLUME;
   private musicVolume = DEFAULT_MUSIC_VOLUME;
   private samples = new Map<SoundId, AudioBuffer>();
   private lastHoverAt = 0;
@@ -70,7 +76,7 @@ export class SoundManager {
     this.master = this.ctx.createGain();
     this.sfxBus = this.ctx.createGain();
     this.musicBus = this.ctx.createGain();
-    this.sfxBus.gain.value = 1;
+    this.sfxBus.gain.value = SFX_BUS_GAIN;
     this.applyMasterGain();
     this.applyMusicGain();
     this.sfxBus.connect(this.master);
