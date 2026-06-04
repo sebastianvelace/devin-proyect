@@ -13,11 +13,12 @@ interface WeaponDef {
   radius: number;
 }
 
+// Paleta Interstellar: azul hielo, ámbar, violeta, oro
 export const WEAPONS: Record<WeaponType, WeaponDef> = {
-  laser: { color: "#00ffff", cooldown: 0.15, damage: 1, speed: 720, radius: 3 },
-  missiles: { color: "#ff8800", cooldown: 0.4, damage: 2, speed: 520, radius: 4 },
-  plasma: { color: "#ff00ff", cooldown: 0.5, damage: 3, speed: 340, radius: 9 },
-  burst: { color: "#ffff00", cooldown: 0.6, damage: 1, speed: 640, radius: 3 },
+  laser:    { color: "#60c8ff", cooldown: 0.15, damage: 1, speed: 720, radius: 3 },
+  missiles: { color: "#e08030", cooldown: 0.4,  damage: 2, speed: 520, radius: 4 },
+  plasma:   { color: "#c030cc", cooldown: 0.5,  damage: 3, speed: 340, radius: 9 },
+  burst:    { color: "#f0c030", cooldown: 0.6,  damage: 1, speed: 640, radius: 3 },
 };
 
 export const WEAPON_LABEL: Record<WeaponType, string> = {

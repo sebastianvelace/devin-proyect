@@ -35,8 +35,10 @@ export class Particle {
   update(dt: number): void {
     this.x += this.vx * dt;
     this.y += this.vy * dt;
-    this.vx *= this.drag;
-    this.vy *= this.drag;
+    // Math.pow hace el drag independiente del framerate (equivale a drag^(1/60) por frame)
+    const d = Math.pow(this.drag, dt * 60);
+    this.vx *= d;
+    this.vy *= d;
     this.life -= dt;
     if (this.life <= 0) this.alive = false;
   }

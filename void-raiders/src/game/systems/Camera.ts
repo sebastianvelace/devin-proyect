@@ -1,39 +1,33 @@
-// Screen shake: desplazamiento aleatorio que decae con el tiempo
+// Screen shake: spring físico que decae y oscila naturalmente
 
-import { randRange } from "../../utils/math";
+import { TAU } from "../../utils/math";
 
 /**
- * Cámara simple que solo aplica screen-shake. `begin`/`end` envuelven el
- * dibujo del mundo para trasladarlo por el offset del temblor.
+ * Cámara con spring-based shake. En lugar de ruido aleatorio por frame,
+ * aplica un impulso al spring y deja que oscile con amortiguación — esto da
+ * una sacudida suave y cinematográfica en lugar de estática de TV.
  */
 export class Camera {
   offsetX = 0;
   offsetY = 0;
-  private mag = 0;
-  private time = 0;
-  private duration = 0;
+  private vx = 0;
+  private vy = 0;
 
-  /** Dispara un temblor de magnitud `mag` (px) durante `duration` segundos. */
-  shake(mag: number, duration: number): void {
-    // no pisar un temblor más fuerte en curso
-    if (mag >= this.mag || this.time <= 0) {
-      this.mag = mag;
-      this.duration = duration;
-      this.time = duration;
-    }
+  /** Aplica un impulso al spring. Llamadas acumulativas se suman. */
+  shake(mag: number, _duration: number): void {
+    const ang = Math.random() * TAU;
+    const impulse = mag * 52;
+    this.vx += Math.cos(ang) * impulse;
+    this.vy += Math.sin(ang) * impulse;
   }
 
   update(dt: number): void {
-    if (this.time <= 0) {
-      this.offsetX = 0;
-      this.offsetY = 0;
-      return;
-    }
-    this.time -= dt;
-    const falloff = Math.max(0, this.time / this.duration);
-    const amp = this.mag * falloff;
-    this.offsetX = randRange(-amp, amp);
-    this.offsetY = randRange(-amp, amp);
+    const stiffness = 310;
+    const damping = 26;
+    this.vx += (-stiffness * this.offsetX - damping * this.vx) * dt;
+    this.vy += (-stiffness * this.offsetY - damping * this.vy) * dt;
+    this.offsetX += this.vx * dt;
+    this.offsetY += this.vy * dt;
   }
 
   begin(ctx: CanvasRenderingContext2D): void {

@@ -18,16 +18,17 @@ interface EnemyStats {
 
 const NORMAL = 110;
 
+// Paleta Interstellar: colores más cinematográficos, menos neon puro
 export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
-  basic: { hp: 1, speed: NORMAL, radius: 14, color: "#ff0040", points: 100, fireRate: 3.6, aoe: false },
-  fast: { hp: 1, speed: NORMAL * 1.8, radius: 11, color: "#ffff00", points: 150, fireRate: 0, aoe: false },
-  tank: { hp: 3, speed: NORMAL * 0.5, radius: 22, color: "#ff00ff", points: 300, fireRate: 3.8, aoe: false },
-  sniper: { hp: 2, speed: 60, radius: 15, color: "#00ff40", points: 250, fireRate: 4.2, aoe: false },
-  bomber: { hp: 2, speed: NORMAL, radius: 15, color: "#ff8800", points: 200, fireRate: 0, aoe: true },
+  basic:  { hp: 1, speed: NORMAL,        radius: 14, color: "#cc2033", points: 100, fireRate: 3.6, aoe: false },
+  fast:   { hp: 1, speed: NORMAL * 1.8,  radius: 11, color: "#d07820", points: 150, fireRate: 0,   aoe: false },
+  tank:   { hp: 3, speed: NORMAL * 0.5,  radius: 22, color: "#7040b0", points: 300, fireRate: 3.8, aoe: false },
+  sniper: { hp: 2, speed: 60,            radius: 15, color: "#208866", points: 250, fireRate: 4.2, aoe: false },
+  bomber: { hp: 2, speed: NORMAL,        radius: 15, color: "#c04800", points: 200, fireRate: 0,   aoe: true  },
 };
 
-const ENEMY_BULLET = "#ff5050";
-const SNIPER_BULLET = "#7dff7d";
+const ENEMY_BULLET  = "#e06050";
+const SNIPER_BULLET = "#50cc88";
 
 export class Enemy {
   type: EnemyType = "basic";

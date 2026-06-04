@@ -51,12 +51,19 @@ export class Bullet {
   }
 
   render(ctx: CanvasRenderingContext2D): void {
+    const spd = Math.hypot(this.vx, this.vy);
+    const stretch = Math.min(4.5, 1 + spd / 260);
+    const ang = Math.atan2(this.vy, this.vx);
+
     ctx.save();
     ctx.shadowColor = this.color;
-    ctx.shadowBlur = 12;
+    ctx.shadowBlur = 14;
     ctx.fillStyle = this.color;
+    ctx.translate(this.x, this.y);
+    ctx.rotate(ang);
+    ctx.scale(stretch, 1);
     ctx.beginPath();
-    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
