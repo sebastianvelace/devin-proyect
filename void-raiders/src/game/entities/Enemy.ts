@@ -19,10 +19,10 @@ interface EnemyStats {
 const NORMAL = 110;
 
 export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
-  basic: { hp: 1, speed: NORMAL, radius: 14, color: "#ff0040", points: 100, fireRate: 2, aoe: false },
-  fast: { hp: 1, speed: NORMAL * 2, radius: 11, color: "#ffff00", points: 150, fireRate: 0, aoe: false },
-  tank: { hp: 3, speed: NORMAL * 0.5, radius: 22, color: "#ff00ff", points: 300, fireRate: 2.5, aoe: false },
-  sniper: { hp: 2, speed: 60, radius: 15, color: "#00ff40", points: 250, fireRate: 3, aoe: false },
+  basic: { hp: 1, speed: NORMAL, radius: 14, color: "#ff0040", points: 100, fireRate: 3.6, aoe: false },
+  fast: { hp: 1, speed: NORMAL * 1.8, radius: 11, color: "#ffff00", points: 150, fireRate: 0, aoe: false },
+  tank: { hp: 3, speed: NORMAL * 0.5, radius: 22, color: "#ff00ff", points: 300, fireRate: 3.8, aoe: false },
+  sniper: { hp: 2, speed: 60, radius: 15, color: "#00ff40", points: 250, fireRate: 4.2, aoe: false },
   bomber: { hp: 2, speed: NORMAL, radius: 15, color: "#ff8800", points: 200, fireRate: 0, aoe: true },
 };
 
@@ -48,7 +48,8 @@ export class Enemy {
   private fireRate = 0;
   private fireTimer = 0;
   private phase = 0; // para zigzag/sine
-  private anchorY = 0; // objetivo vertical del sniper
+  private anchorY = 0; // línea de combate (objetivo vertical)
+  private homeX = 0; // centro de patrulla horizontal
 
   spawn(type: EnemyType, x: number, y: number, anchorY: number): void {
     const s = ENEMY_STATS[type];
@@ -65,6 +66,7 @@ export class Enemy {
     this.fireTimer = s.fireRate * (0.5 + Math.random() * 0.5);
     this.phase = Math.random() * TAU;
     this.anchorY = anchorY;
+    this.homeX = x;
     this.alive = true;
     this.detonated = false;
     this.scored = false;
@@ -84,43 +86,39 @@ export class Enemy {
     return false;
   }
 
-  update(dt: number, player: Player, bullets: Pool<Bullet>): void {
+  update(dt: number, player: Player, bullets: Pool<Bullet>, width: number): void {
     this.phase += dt;
     const ang = Math.atan2(player.y - this.y, player.x - this.x);
 
     switch (this.type) {
       case "basic":
-        this.x += Math.cos(ang) * this.speed * dt;
-        this.y += Math.sin(ang) * this.speed * dt;
+        // baja a su línea de combate y patrulla de lado a lado
+        this.holdLine(dt, width, 70);
         break;
       case "fast": {
-        // avanza hacia el jugador con oscilación lateral (zigzag)
+        // intercepta al jugador con una oscilación lateral suave
         const perp = ang + Math.PI / 2;
-        const wobble = Math.sin(this.phase * 6) * 90;
+        const wobble = Math.sin(this.phase * 3.5) * 55;
         this.x += (Math.cos(ang) * this.speed + Math.cos(perp) * wobble) * dt;
         this.y += (Math.sin(ang) * this.speed + Math.sin(perp) * wobble) * dt;
         break;
       }
       case "tank":
-        this.x += Math.cos(ang) * this.speed * dt;
-        this.y += Math.sin(ang) * this.speed * dt;
+        // sostiene una línea baja, patrulla corta y pesada
+        this.holdLine(dt, width, 45);
         break;
       case "sniper":
-        // baja hasta su ancla y luego se queda estático
+        // baja hasta su ancla (con frenado suave) y se queda estático
         if (this.y < this.anchorY) {
-          this.y += this.speed * dt;
+          this.y += Math.min(this.speed, (this.anchorY - this.y) * 3) * dt;
         }
         break;
-      case "bomber": {
+      case "bomber":
+        // kamikaze: embiste y explota en área al contacto
         this.x += Math.cos(ang) * this.speed * dt;
         this.y += Math.sin(ang) * this.speed * dt;
-        const dist = Math.hypot(player.x - this.x, player.y - this.y);
-        if (dist < this.radius + player.radius + 6) {
-          this.alive = false;
-          this.detonated = true;
-        }
+        this.contactDetonate(player);
         break;
-      }
     }
 
     // disparo
@@ -130,6 +128,29 @@ export class Enemy {
         this.fireTimer = this.fireRate;
         this.shoot(ang, bullets);
       }
+    }
+  }
+
+  /**
+   * Desciende a su línea de combate (`anchorY`) y patrulla de lado a lado en
+   * torno a su posición de origen (`homeX`). No converge sobre el jugador, así
+   * el fuego queda repartido y es esquivable.
+   */
+  private holdLine(dt: number, width: number, amp: number): void {
+    if (this.y < this.anchorY) {
+      this.y += Math.min(this.speed, (this.anchorY - this.y) * 3) * dt;
+    } else {
+      this.y = this.anchorY + Math.sin(this.phase * 1.4) * 12;
+    }
+    this.x = this.homeX + Math.sin(this.phase * 0.9) * amp;
+    this.x = Math.max(this.radius, Math.min(width - this.radius, this.x));
+  }
+
+  private contactDetonate(player: Player): void {
+    const dist = Math.hypot(player.x - this.x, player.y - this.y);
+    if (dist < this.radius + player.radius + 6) {
+      this.alive = false;
+      this.detonated = true;
     }
   }
 
@@ -145,15 +166,17 @@ export class Enemy {
       });
     };
 
+    // pequeña imprecisión: el fuego es esquivable moviéndose
+    const jitter = (Math.random() - 0.5) * 0.22;
     switch (this.type) {
       case "basic":
-        fire(ang, 240, ENEMY_BULLET, 4);
+        fire(ang + jitter, 150, ENEMY_BULLET, 4);
         break;
       case "tank":
-        for (let i = -1; i <= 1; i++) fire(ang + i * 0.18, 220, ENEMY_BULLET, 4);
+        for (let i = -1; i <= 1; i++) fire(ang + i * 0.18 + jitter, 150, ENEMY_BULLET, 4);
         break;
       case "sniper":
-        fire(ang, 460, SNIPER_BULLET, 3);
+        fire(ang, 340, SNIPER_BULLET, 3);
         break;
       default:
         break;
