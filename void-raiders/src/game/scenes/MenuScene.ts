@@ -37,8 +37,8 @@ const DIM_DARK = "#667788";
 const BG_DEEP  = "#020408";
 const RED_ACC  = "#cc4455";
 
-const FONT_DISPLAY = "'Syne', sans-serif";
-const FONT_UI      = "'IBM Plex Sans', sans-serif";
+const FONT_DISPLAY = "'Cormorant Garamond', serif";
+const FONT_UI      = "'DM Sans', sans-serif";
 const FONT_MONO    = "'JetBrains Mono', monospace";
 
 export class MenuScene implements Scene {
@@ -77,7 +77,7 @@ export class MenuScene implements Scene {
   private seedParticles(): void {
     const { width: w, height: h } = this.game;
     this.particles = [];
-    const count = Math.floor((w * h) / 22000);
+    const count = Math.floor((w * h) / 48000);
     for (let i = 0; i < count; i++) {
       this.particles.push(this.makeParticle(w, h, true));
     }
@@ -227,24 +227,20 @@ export class MenuScene implements Scene {
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, w, h);
 
-    this.renderMenuNebulaBoost(ctx, w, h);
     this.starfield.renderNebula(ctx);
 
-    const px = (this.game.pointer.x / this.game.width - 0.5) * 22;
-    const py = (this.game.pointer.y / this.game.height - 0.5) * 16;
+    const px = (this.game.pointer.x / this.game.width - 0.5) * 12;
+    const py = (this.game.pointer.y / this.game.height - 0.5) * 8;
     this.starfield.render(ctx, px, py);
 
     this.renderParticles(ctx);
 
     const cx = w / 2;
     const cy = h / 2;
-    const diskY = cy - 72;
 
-    this.renderAccretionDisk(ctx, cx, diskY);
-    this.renderHorizonGlow(ctx, cx, diskY + 28);
-
-    this.renderTitle(ctx, cx, cy - 198);
-    this.renderTagline(ctx, cx, cy - 138);
+    this.renderTitle(ctx, cx, cy - 210);
+    this.renderTagline(ctx, cx, cy - 168);
+    this.renderHowToPlay(ctx, cx, cy - 32);
 
     this.renderButtons(ctx);
     this.renderAudioToggle(ctx);
@@ -253,124 +249,24 @@ export class MenuScene implements Scene {
     this.renderVignette(ctx, w, h);
   }
 
-  /** Capa extra de nebulosa solo en menú */
-  private renderMenuNebulaBoost(ctx: CanvasRenderingContext2D, w: number, h: number): void {
-    const drift = Math.sin(this.time * 0.12) * 0.02;
-
-    const g1 = ctx.createRadialGradient(w * (0.82 + drift), h * 0.18, 0, w * 0.82, h * 0.18, w * 0.55);
-    g1.addColorStop(0, "rgba(232, 168, 64, 0.09)");
-    g1.addColorStop(0.45, "rgba(200, 120, 30, 0.04)");
-    g1.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = g1;
-    ctx.fillRect(0, 0, w, h);
-
-    const g2 = ctx.createRadialGradient(w * (0.12 - drift), h * 0.78, 0, w * 0.12, h * 0.78, w * 0.48);
-    g2.addColorStop(0, "rgba(128, 200, 255, 0.1)");
-    g2.addColorStop(0.5, "rgba(40, 90, 180, 0.04)");
-    g2.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = g2;
-    ctx.fillRect(0, 0, w, h);
-  }
-
   private renderParticles(ctx: CanvasRenderingContext2D): void {
     for (const p of this.particles) {
       const t = p.life / p.maxLife;
       ctx.save();
-      ctx.globalAlpha = t * 0.7;
+      ctx.globalAlpha = t * 0.35;
       ctx.fillStyle = p.color;
-      ctx.shadowColor = p.color;
-      ctx.shadowBlur = 4;
       ctx.fillRect(p.x, p.y, p.size, p.size * 0.4);
       ctx.restore();
     }
-  }
-
-  /** Disco de acreción estático y muy sutil */
-  private renderAccretionDisk(ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
-    ctx.save();
-    ctx.translate(cx, cy);
-
-    const rings = [
-      { rx: 78, ry: 18, alpha: 0.14, color: AMBER, width: 4 },
-      { rx: 94, ry: 21, alpha: 0.08, color: "#d07020", width: 6 },
-      { rx: 64, ry: 14, alpha: 0.1, color: GOLD, width: 2 },
-    ];
-
-    for (const ring of rings) {
-      ctx.save();
-      ctx.globalAlpha = ring.alpha;
-      ctx.strokeStyle = ring.color;
-      ctx.lineWidth = ring.width;
-      ctx.shadowColor = ring.color;
-      ctx.shadowBlur = 14;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, ring.rx, ring.ry, 0, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    ctx.globalAlpha = 0.2;
-    ctx.strokeStyle = WARM_W + "99";
-    ctx.lineWidth = 1.5;
-    ctx.shadowColor = GOLD;
-    ctx.shadowBlur = 8;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 48, 11, 0, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = 0.75;
-    const core = ctx.createRadialGradient(0, 0, 0, 0, 0, 22);
-    core.addColorStop(0, "rgba(0,0,0,0.95)");
-    core.addColorStop(0.7, "rgba(2,4,8,0.6)");
-    core.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = core;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 22, 6, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.restore();
-    ctx.globalAlpha = 1;
-  }
-
-  private renderHorizonGlow(ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.globalAlpha = 0.14;
-    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 280);
-    glow.addColorStop(0, AMBER + "44");
-    glow.addColorStop(0.4, "rgba(200, 120, 40, 0.08)");
-    glow.addColorStop(1, "transparent");
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 260, 38, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.globalAlpha = 0.18;
-    ctx.strokeStyle = GOLD + "66";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 160, 12, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
   }
 
   private renderTitle(ctx: CanvasRenderingContext2D, x: number, y: number): void {
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = `600 58px ${FONT_DISPLAY}`;
-    ctx.letterSpacing = "8px";
-
-    const grad = ctx.createLinearGradient(x - 280, y, x + 280, y);
-    grad.addColorStop(0, AMBER);
-    grad.addColorStop(0.45, GOLD);
-    grad.addColorStop(0.55, WARM_W);
-    grad.addColorStop(1, AMBER);
-
-    ctx.fillStyle = grad;
-    ctx.shadowColor = AMBER;
-    ctx.shadowBlur = 28;
+    ctx.font = `500 64px ${FONT_DISPLAY}`;
+    ctx.letterSpacing = "6px";
+    ctx.fillStyle = WARM_W;
     ctx.fillText("VOID RAIDERS", x, y);
     ctx.restore();
   }
@@ -379,9 +275,9 @@ export class MenuScene implements Scene {
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = `400 13px ${FONT_UI}`;
-    ctx.letterSpacing = "4px";
-    ctx.fillStyle = ICE + "bb";
+    ctx.font = `300 12px ${FONT_UI}`;
+    ctx.letterSpacing = "5px";
+    ctx.fillStyle = DIM;
     ctx.fillText("DEEP SPACE COMBAT", x, y);
     ctx.restore();
   }
@@ -397,25 +293,20 @@ export class MenuScene implements Scene {
       ctx.save();
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.letterSpacing = b.primary ? "3px" : "2px";
+      ctx.letterSpacing = b.primary ? "4px" : "2px";
       ctx.font = b.primary
-        ? `500 15px ${FONT_UI}`
-        : `400 13px ${FONT_UI}`;
-      ctx.fillStyle = hover ? WARM_W : accent;
-      if (hover) {
-        ctx.shadowColor = accent;
-        ctx.shadowBlur = 10;
-      }
+        ? `400 14px ${FONT_UI}`
+        : `300 12px ${FONT_UI}`;
+      ctx.fillStyle = hover ? WARM_W : (b.primary ? WARM_W : DIM);
       ctx.fillText(b.label, tx, ty);
 
-      if (hover) {
-        const underlineW = Math.min(b.w * 0.55, ctx.measureText(b.label).width + 12);
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = accent + "88";
+      if (hover && b.primary) {
+        const underlineW = Math.min(b.w * 0.5, ctx.measureText(b.label).width + 8);
+        ctx.strokeStyle = AMBER + "99";
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(tx - underlineW / 2, ty + 14);
-        ctx.lineTo(tx + underlineW / 2, ty + 14);
+        ctx.moveTo(tx - underlineW / 2, ty + 12);
+        ctx.lineTo(tx + underlineW / 2, ty + 12);
         ctx.stroke();
       }
       ctx.restore();
@@ -442,13 +333,48 @@ export class MenuScene implements Scene {
     ctx.restore();
   }
 
+  private renderHowToPlay(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+    const lines = [
+      "WASD o flechas para mover · ratón para apuntar y clic para disparar",
+      "Teclas 1–6 cambian el arma · espacio lanza bomba",
+      "Destruye oleadas y derrota al jefe de cada nivel",
+    ];
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    const ruleW = 48;
+    ctx.strokeStyle = DIM_DARK + "88";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x - ruleW, y - 58);
+    ctx.lineTo(x + ruleW, y - 58);
+    ctx.stroke();
+
+    ctx.font = `400 11px ${FONT_UI}`;
+    ctx.letterSpacing = "2px";
+    ctx.fillStyle = DIM;
+    ctx.fillText("cómo jugar", x, y - 42);
+
+    ctx.font = `300 13px ${FONT_UI}`;
+    ctx.letterSpacing = "0.2px";
+    let lineY = y - 14;
+    for (const line of lines) {
+      ctx.fillStyle = DIM + "dd";
+      ctx.fillText(line, x, lineY);
+      lineY += 22;
+    }
+    ctx.restore();
+  }
+
   private renderHint(ctx: CanvasRenderingContext2D, x: number, y: number): void {
     ctx.save();
     ctx.textAlign = "center";
-    ctx.font = `400 11px ${FONT_MONO}`;
-    ctx.letterSpacing = "1px";
+    ctx.font = `300 11px ${FONT_UI}`;
+    ctx.letterSpacing = "0.5px";
     ctx.fillStyle = DIM_DARK;
-    ctx.fillText("WASD · AIM · SHOOT · 1–6 · SPACE · M MUTE", x, y);
+    ctx.fillText("LAUNCH MISSION para empezar  ·  M silencia audio", x, y);
     ctx.restore();
   }
 
@@ -471,7 +397,7 @@ export class MenuScene implements Scene {
   private renderVignette(ctx: CanvasRenderingContext2D, w: number, h: number): void {
     const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) / 2.4, w / 2, h / 2, Math.max(w, h) * 1.02);
     g.addColorStop(0, "rgba(0,0,0,0)");
-    g.addColorStop(1, "rgba(0,0,0,0.8)");
+    g.addColorStop(1, "rgba(0,0,0,0.55)");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
   }
