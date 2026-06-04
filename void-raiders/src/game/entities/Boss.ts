@@ -138,9 +138,9 @@ export class Boss {
     if (this.minionTimer > 0) return [];
     this.minionTimer = interval;
 
-    if (ph === 1) return ["basic", "basic"];
-    if (ph === 2) return ["fast", "basic"];
-    return ["fast", "fast", "bomber"];
+    if (ph === 1) return ["basic", "elite"];
+    if (ph === 2) return ["fast", "hunter", "basic"];
+    return ["fast", "hunter", "elite", "bomber"];
   }
 
   render(ctx: CanvasRenderingContext2D): void {

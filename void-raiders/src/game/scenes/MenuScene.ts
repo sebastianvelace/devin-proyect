@@ -37,9 +37,9 @@ const DIM_DARK = "#667788";
 const BG_DEEP  = "#020408";
 const RED_ACC  = "#cc4455";
 
-const FONT_DISPLAY = "'Cormorant Garamond', serif";
-const FONT_UI      = "'DM Sans', sans-serif";
-const FONT_MONO    = "'JetBrains Mono', monospace";
+const FONT_TITLE = "'Bangers', cursive";
+const FONT_UI    = "'Nunito', sans-serif";
+const FONT_MONO  = "'JetBrains Mono', monospace";
 
 export class MenuScene implements Scene {
   private readonly starfield = new Starfield(1.35);
@@ -264,8 +264,8 @@ export class MenuScene implements Scene {
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = `500 64px ${FONT_DISPLAY}`;
-    ctx.letterSpacing = "6px";
+    ctx.font = `400 76px ${FONT_TITLE}`;
+    ctx.letterSpacing = "3px";
     ctx.fillStyle = WARM_W;
     ctx.fillText("VOID RAIDERS", x, y);
     ctx.restore();
@@ -275,8 +275,8 @@ export class MenuScene implements Scene {
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = `300 12px ${FONT_UI}`;
-    ctx.letterSpacing = "5px";
+    ctx.font = `600 13px ${FONT_UI}`;
+    ctx.letterSpacing = "3px";
     ctx.fillStyle = DIM;
     ctx.fillText("DEEP SPACE COMBAT", x, y);
     ctx.restore();
@@ -294,8 +294,8 @@ export class MenuScene implements Scene {
       ctx.textBaseline = "middle";
       ctx.letterSpacing = b.primary ? "4px" : "2px";
       ctx.font = b.primary
-        ? `400 14px ${FONT_UI}`
-        : `300 12px ${FONT_UI}`;
+        ? `700 15px ${FONT_UI}`
+        : `600 12px ${FONT_UI}`;
       ctx.fillStyle = hover ? WARM_W : (b.primary ? WARM_W : DIM);
       ctx.fillText(b.label, tx, ty);
 
@@ -345,8 +345,8 @@ export class MenuScene implements Scene {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    ctx.font = `500 34px ${FONT_DISPLAY}`;
-    ctx.letterSpacing = "2px";
+    ctx.font = `700 28px ${FONT_UI}`;
+    ctx.letterSpacing = "1px";
     ctx.fillStyle = WARM_W;
     ctx.fillText(title, x, titleY);
 
@@ -368,7 +368,7 @@ export class MenuScene implements Scene {
     ctx.lineTo(x + titleW / 2, titleY + 18);
     ctx.stroke();
 
-    ctx.font = `300 13px ${FONT_UI}`;
+    ctx.font = `400 13px ${FONT_UI}`;
     ctx.letterSpacing = "0.2px";
     let lineY = y - 6;
     for (const line of lines) {
@@ -382,7 +382,7 @@ export class MenuScene implements Scene {
   private renderHint(ctx: CanvasRenderingContext2D, x: number, y: number): void {
     ctx.save();
     ctx.textAlign = "center";
-    ctx.font = `300 11px ${FONT_UI}`;
+    ctx.font = `400 11px ${FONT_UI}`;
     ctx.letterSpacing = "0.5px";
     ctx.fillStyle = DIM_DARK;
     ctx.fillText("LAUNCH MISSION para empezar  ·  M silencia audio", x, y);

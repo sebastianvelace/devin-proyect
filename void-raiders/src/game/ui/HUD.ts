@@ -170,9 +170,10 @@ export class HUD {
     ctx.letterSpacing = "0px";
 
     const count = Math.max(0, lives);
+    const iconY = 28;
     for (let i = 0; i < 3; i++) {
       const x = 18 + i * 20;
-      const y = 22;
+      const y = iconY;
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(-Math.PI / 2);
@@ -203,20 +204,20 @@ export class HUD {
     ctx.font = "400 10px 'JetBrains Mono', monospace";
     ctx.fillStyle = DIM;
     ctx.letterSpacing = "2px";
-    ctx.fillText("WEAPON", 18, 40);
+    ctx.fillText("WEAPON", 18, 48);
     ctx.letterSpacing = "0px";
 
     ctx.font = "700 13px 'Orbitron', sans-serif";
     ctx.fillStyle = color;
     ctx.shadowColor = color;
     ctx.shadowBlur = 8;
-    ctx.fillText(WEAPON_LABEL[weapon], 75, 38);
+    ctx.fillText(WEAPON_LABEL[weapon], 75, 46);
     ctx.shadowBlur = 0;
   }
 
   private renderAmmo(ctx: CanvasRenderingContext2D, state: HudState): void {
     const x = 18;
-    const y = 64; // justo debajo del top bar
+    const y = 72; // debajo de WEAPON, sin solapar iconos de vidas
     const barW = 140;
     const barH = 5;
 
