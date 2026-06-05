@@ -80,21 +80,22 @@ export class Game {
     this.lastTime = now;
     if (frame > MAX_FRAME) frame = MAX_FRAME;
 
-    const { ctx, scene } = this;
-    if (scene) {
+    const { ctx } = this;
+    if (this.scene) {
       // Simulación a paso fijo: el movimiento es idéntico sea cual sea el FPS
       // y los frames lentos "se ponen al día" en vez de ralentizar el juego.
       this.accumulator += frame;
       let steps = 0;
       while (this.accumulator >= STEP && steps < MAX_STEPS) {
-        scene.update(STEP);
+        this.scene.update(STEP);
         this.accumulator -= STEP;
         steps += 1;
         this.input.endFrame();
         this.clicks.length = 0; // los clicks se consumen por paso
       }
       if (steps === MAX_STEPS) this.accumulator = 0; // descarta acumulado excesivo
-      scene.render(ctx);
+      // Siempre la escena activa tras update (changeScene puede ocurrir dentro de update).
+      this.scene.render(ctx);
     }
     this.rafId = requestAnimationFrame(this.tick);
   };

@@ -67,6 +67,13 @@ export class SoundManager {
   private musicVolume = DEFAULT_MUSIC_VOLUME;
   private samples = new Map<SoundId, AudioBuffer>();
   private lastHoverAt = 0;
+  private blackHoleFilter: BiquadFilterNode | null = null;
+  private blackHoleGain: GainNode | null = null;
+  private blackHoleOsc: OscillatorNode | null = null;
+  private blackHoleSubOsc: OscillatorNode | null = null;
+  private blackHoleNoise: AudioBufferSourceNode | null = null;
+  private blackHoleActive = false;
+  private blackHoleStingPlayed = false;
 
   init(): void {
     if (this.ready) return;
@@ -916,6 +923,140 @@ export class SoundManager {
     g.gain.setValueAtTime(0.12, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
     this.ramp(o, g, 0.14);
+  }
+
+  /** Inicia rumble + filtro de agujero negro (cinemática ~11 s). */
+  startBlackHoleCinematic(): void {
+    if (!this.ctx || !this.sfxBus || this.muted) return;
+    this.resume();
+    this.endBlackHoleCinematic();
+    this.blackHoleActive = true;
+    this.blackHoleStingPlayed = false;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const end = t + 10.8;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(14000, t);
+    filter.Q.setValueAtTime(0.5, t);
+    filter.Q.linearRampToValueAtTime(1.8, t + 5);
+    filter.Q.linearRampToValueAtTime(0.4, end);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.24, t + 1.2);
+    filter.connect(gain);
+    gain.connect(this.sfxBus);
+    this.blackHoleFilter = filter;
+    this.blackHoleGain = gain;
+
+    const o = ctx.createOscillator();
+    o.type = "sine";
+    o.frequency.setValueAtTime(48, t);
+    o.frequency.exponentialRampToValueAtTime(22, t + 6);
+    o.frequency.exponentialRampToValueAtTime(12, end);
+    const og = ctx.createGain();
+    og.gain.setValueAtTime(0, t);
+    og.gain.linearRampToValueAtTime(0.1, t + 2);
+    og.gain.linearRampToValueAtTime(0.16, t + 5);
+    og.gain.exponentialRampToValueAtTime(0.0001, end + 0.2);
+    o.connect(og);
+    og.connect(filter);
+    o.start(t);
+    o.stop(end + 0.3);
+    this.blackHoleOsc = o;
+
+    const sub = ctx.createOscillator();
+    sub.type = "triangle";
+    sub.frequency.setValueAtTime(28, t);
+    sub.frequency.exponentialRampToValueAtTime(9, end);
+    const sg = ctx.createGain();
+    sg.gain.setValueAtTime(0, t);
+    sg.gain.linearRampToValueAtTime(0.08, t + 3);
+    sg.gain.exponentialRampToValueAtTime(0.0001, end + 0.1);
+    sub.connect(sg);
+    sg.connect(filter);
+    sub.start(t);
+    sub.stop(end + 0.2);
+    this.blackHoleSubOsc = sub;
+
+    const len = Math.floor(ctx.sampleRate * 3);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) {
+      const brown = i > 0 ? data[i - 1] * 0.96 + (Math.random() * 2 - 1) * 0.12 : 0;
+      data[i] = brown;
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = buf;
+    noise.loop = true;
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0, t);
+    ng.gain.linearRampToValueAtTime(0.06, t + 1.5);
+    ng.gain.linearRampToValueAtTime(0.11, t + 4);
+    ng.gain.exponentialRampToValueAtTime(0.0001, end - 0.5);
+    noise.connect(ng);
+    ng.connect(filter);
+    noise.start(t);
+    noise.stop(end);
+    this.blackHoleNoise = noise;
+
+    if (this.musicBus) {
+      this.musicBus.gain.setValueAtTime(this.musicVolume * (this.muted ? 0 : 1), t);
+      this.musicBus.gain.linearRampToValueAtTime(0.015, t + 7);
+    }
+  }
+
+  /** Actualiza muffling y dispara el warp sting al final. */
+  updateBlackHoleCinematic(t: number): void {
+    if (!this.blackHoleActive || !this.blackHoleFilter || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    const muff = t < 0.2 ? 0 : Math.min(1, Math.pow((t - 0.2) / 0.72, 1.35));
+    const freq = 14000 * Math.pow(0.08, muff);
+    this.blackHoleFilter.frequency.setTargetAtTime(freq, now, 0.14);
+    this.blackHoleFilter.Q.setTargetAtTime(0.5 + muff * 1.4, now, 0.12);
+    if (this.blackHoleGain) {
+      const vol = 0.24 * (1 - muff * 0.88) + muff * 0.04;
+      this.blackHoleGain.gain.setTargetAtTime(vol, now, 0.12);
+    }
+    if (t >= 0.88 && !this.blackHoleStingPlayed) {
+      this.blackHoleStingPlayed = true;
+      this.blackHoleWarpSting();
+    }
+  }
+
+  private blackHoleWarpSting(): void {
+    if (!this.ctx || !this.sfxBus || this.muted) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    this.noiseBurst(0.25, 0.12, 3200, "highpass");
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(90, t);
+    o.frequency.exponentialRampToValueAtTime(1200, t + 0.35);
+    g.gain.setValueAtTime(0.18, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+    o.connect(g);
+    g.connect(this.sfxBus);
+    o.start(t);
+    o.stop(t + 0.52);
+  }
+
+  endBlackHoleCinematic(): void {
+    this.blackHoleActive = false;
+    try { this.blackHoleOsc?.stop(); } catch { /* ya parado */ }
+    try { this.blackHoleSubOsc?.stop(); } catch { /* ya parado */ }
+    try { this.blackHoleNoise?.stop(); } catch { /* ya parado */ }
+    this.blackHoleOsc = null;
+    this.blackHoleSubOsc = null;
+    this.blackHoleNoise = null;
+    this.blackHoleFilter?.disconnect();
+    this.blackHoleGain?.disconnect();
+    this.blackHoleFilter = null;
+    this.blackHoleGain = null;
+    this.blackHoleStingPlayed = false;
+    this.applyMusicGain();
   }
 }
 

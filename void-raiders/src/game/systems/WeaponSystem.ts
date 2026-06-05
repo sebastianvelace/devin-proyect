@@ -87,6 +87,14 @@ export class WeaponSystem {
   get color(): string         { return WEAPONS[this.current].color; }
   get ready(): boolean        { return this.cooldown <= 0 && !this._reloading; }
 
+  /** Recarga el arma actual al máximo (sin cambiar de arma). */
+  refillAmmo(): void {
+    this._ammo = WEAPONS[this.current].maxAmmo;
+    this._reloading = false;
+    this._reloadTimer = 0;
+    this.cooldown = 0;
+  }
+
   /** Cambia de arma y restaura el cargador inmediatamente. */
   setWeapon(weapon: WeaponType): void {
     if (this.current === weapon) return;

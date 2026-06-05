@@ -4,6 +4,7 @@ import type { Bullet } from "../entities/Bullet";
 import type { Enemy } from "../entities/Enemy";
 import type { Player } from "../entities/Player";
 import type { PowerUp } from "../entities/PowerUp";
+import type { Ally } from "../entities/Ally";
 import type { Pool } from "../../utils/pool";
 import { distanceSq } from "../../utils/math";
 
@@ -79,6 +80,42 @@ export class CollisionSystem {
       if (overlap(pu.x, pu.y, pu.radius, player.x, player.y, player.radius)) {
         onCollect(pu);
         pu.alive = false;
+      }
+    }
+  }
+
+  /** Balas enemigas vs escoltas aliadas. */
+  enemyBulletsVsAllies(
+    bullets: Pool<Bullet>,
+    allies: readonly Ally[],
+    onHit: (ally: Ally, bullet: Bullet) => void,
+  ): void {
+    for (const b of bullets.active) {
+      if (!b.alive || b.friendly) continue;
+      for (const a of allies) {
+        if (!a.alive) continue;
+        if (overlap(b.x, b.y, b.radius, a.x, a.y, a.collisionRadius)) {
+          onHit(a, b);
+          b.alive = false;
+          break;
+        }
+      }
+    }
+  }
+
+  /** Contacto enemigo-aliado (la escolta se pierde). */
+  enemiesVsAllies(
+    enemies: readonly Enemy[],
+    allies: readonly Ally[],
+    onHit: (ally: Ally, enemy: Enemy) => void,
+  ): void {
+    for (const a of allies) {
+      if (!a.alive) continue;
+      for (const e of enemies) {
+        if (!e.alive) continue;
+        if (overlap(a.x, a.y, a.collisionRadius, e.x, e.y, e.radius)) {
+          onHit(a, e);
+        }
       }
     }
   }

@@ -1,6 +1,12 @@
 // Enemigos geométricos: factory + comportamiento por tipo
 
 import type { EnemyType } from "../../types";
+import {
+  ENEMY_AIM_JITTER_MAX,
+  ENEMY_BULLET_SPEED_MULT,
+  ENEMY_FIRE_RATE_MULT,
+  ENEMY_MOVE_SPEED_MULT,
+} from "../combatConstants";
 import type { Bullet } from "./Bullet";
 import type { Player } from "./Player";
 import type { Pool } from "../../utils/pool";
@@ -50,6 +56,7 @@ export class Enemy {
   private speed = NORMAL;
   private fireRate = 0;
   private fireTimer = 0;
+  private bulletSpeedMult = 1;
   private phase = 0; // para zigzag/sine
   private anchorY = 0; // línea de combate (objetivo vertical)
   private homeX = 0; // centro de patrulla horizontal
@@ -57,19 +64,30 @@ export class Enemy {
   private hitFlash = 0;
   private damageWobble = 0;
 
-  spawn(type: EnemyType, x: number, y: number, anchorY: number): void {
+  spawn(
+    type: EnemyType,
+    x: number,
+    y: number,
+    anchorY: number,
+    hpMult = 1,
+    speedMult = 1,
+    fireRateMult = 1,
+    bulletSpeedMult = 1,
+  ): void {
     const s = ENEMY_STATS[type];
     this.type = type;
     this.x = x;
     this.y = y;
-    this.hp = s.hp;
-    this.maxHp = s.hp;
+    const hp = Math.max(1, Math.round(s.hp * hpMult));
+    this.hp = hp;
+    this.maxHp = hp;
     this.radius = s.radius;
     this.color = s.color;
     this.points = s.points;
-    this.speed = s.speed;
-    this.fireRate = s.fireRate;
-    this.fireTimer = s.fireRate * (0.5 + Math.random() * 0.5);
+    this.speed = s.speed * speedMult * ENEMY_MOVE_SPEED_MULT;
+    this.fireRate = s.fireRate > 0 ? s.fireRate * ENEMY_FIRE_RATE_MULT * fireRateMult : 0;
+    this.bulletSpeedMult = bulletSpeedMult;
+    this.fireTimer = this.fireRate * (0.5 + Math.random() * 0.5);
     this.phase = Math.random() * TAU;
     this.anchorY = anchorY;
     this.homeX = x;
@@ -184,7 +202,7 @@ export class Enemy {
 
   private shoot(ang: number, bullets: Pool<Bullet>): void {
     const fire = (a: number, speed: number, color: string, radius: number): void => {
-      const v = vecFromAngle(a, speed);
+      const v = vecFromAngle(a, speed * ENEMY_BULLET_SPEED_MULT * this.bulletSpeedMult);
       bullets.obtain().init(this.x, this.y, v.x, v.y, {
         radius,
         damage: 1,
@@ -195,7 +213,7 @@ export class Enemy {
     };
 
     // pequeña imprecisión: el fuego es esquivable moviéndose
-    const jitter = (Math.random() - 0.5) * 0.22;
+    const jitter = (Math.random() - 0.5) * ENEMY_AIM_JITTER_MAX;
     switch (this.type) {
       case "basic":
       case "elite":

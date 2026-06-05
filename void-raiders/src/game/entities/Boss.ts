@@ -4,6 +4,8 @@ import type { EnemyType } from "../../types";
 import type { Player } from "./Player";
 import type { Bullet } from "./Bullet";
 import type { Pool } from "../../utils/pool";
+import { sectorBossMaxHp, sectorBossPoints } from "../sectorConfig";
+import { ENEMY_BULLET_SPEED_MULT } from "../combatConstants";
 import { TAU, vecFromAngle } from "../../utils/math";
 
 export const BOSS_MINION_CAP = 6;
@@ -34,9 +36,9 @@ export class Boss {
 
   constructor(x: number, _y: number, level: number) {
     this.x = x;
-    this.maxHp = 80 + (level - 1) * 60;
+    this.maxHp = sectorBossMaxHp(level);
     this.hp = this.maxHp;
-    this.points = 2000 * level;
+    this.points = sectorBossPoints(level);
   }
 
   get hpRatio(): number { return Math.max(0, this.hp / this.maxHp); }
@@ -87,7 +89,7 @@ export class Boss {
     if (this.fireTimers[0] <= 0) {
       this.fireTimers[0] = 2.4 - (ph - 1) * 0.3;
       const count = 4 + ph;
-      const spd = 160 + (ph - 1) * 18;
+      const spd = (160 + (ph - 1) * 18) * ENEMY_BULLET_SPEED_MULT;
       for (let i = 0; i < count; i++) {
         const ang = Math.PI / 2 + (i - (count - 1) / 2) * 0.27;
         const v = vecFromAngle(ang, spd);
@@ -104,7 +106,7 @@ export class Boss {
         this.fireTimers[1] = Math.max(0.55, 1.5 - (ph - 2) * 0.4);
         const ang = Math.atan2(player.y - this.y, player.x - this.x);
         for (const off of [-0.1, 0.1]) {
-          const v = vecFromAngle(ang + off, 245);
+          const v = vecFromAngle(ang + off, 245 * ENEMY_BULLET_SPEED_MULT);
           bullets.obtain().init(this.x, this.y, v.x, v.y, {
             radius: 4, damage: 1, color: this.color, friendly: false, life: 4,
           });
@@ -119,7 +121,7 @@ export class Boss {
         this.fireTimers[2] = 0.13;
         const ang = this.time * 3.2;
         for (let arm = 0; arm < 3; arm++) {
-          const v = vecFromAngle(ang + (arm / 3) * TAU, 195);
+          const v = vecFromAngle(ang + (arm / 3) * TAU, 195 * ENEMY_BULLET_SPEED_MULT);
           bullets.obtain().init(this.x, this.y, v.x, v.y, {
             radius: 4, damage: 1, color: "#ff2040", friendly: false, life: 3.5,
           });

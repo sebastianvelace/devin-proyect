@@ -1,8 +1,10 @@
-// Warp entre niveles — star-warp + stats del sector
+// Warp entre sectores — star-warp + stats (no agujero negro)
 
 import type { Scene } from "../../types";
 import type { Game } from "../Game";
+import type { RunState } from "../RunState";
 import { Starfield } from "../systems/Starfield";
+import { isAct2 } from "../sectorConfig";
 import { GameScene } from "./GameScene";
 import { soundManager } from "../../audio/SoundManager";
 
@@ -14,20 +16,27 @@ const WARM_W = "#f0e8d0";
 const DURATION = 3;
 
 export class TransitionScene implements Scene {
-  private readonly starfield = new Starfield(2.8);
+  private readonly starfield: Starfield;
   private readonly game: Game;
   private readonly nextLevel: number;
   private readonly levelName: string;
-  private readonly score: number;
+  private readonly run: RunState;
   private readonly kills: number;
   private time = 0;
 
-  constructor(game: Game, nextLevel: number, levelName: string, score: number, kills: number) {
+  constructor(
+    game: Game,
+    nextLevel: number,
+    levelName: string,
+    run: RunState,
+    kills: number,
+  ) {
     this.game = game;
     this.nextLevel = nextLevel;
     this.levelName = levelName;
-    this.score = score;
+    this.run = run;
     this.kills = kills;
+    this.starfield = new Starfield(2.8, isAct2(nextLevel) ? "act2" : "act1");
   }
 
   enter(): void {
@@ -45,12 +54,12 @@ export class TransitionScene implements Scene {
     this.starfield.update(dt * (1 + this.time * 0.8));
 
     if (this.time >= DURATION) {
-      this.game.changeScene(new GameScene(this.game, this.nextLevel));
+      this.game.changeScene(new GameScene(this.game, this.nextLevel, this.run));
     }
     if (this.game.input.wasPressed("KeyM")) soundManager.toggleMute();
     if (this.game.input.wasPressed("Escape")) {
       soundManager.play("menu_back");
-      this.game.changeScene(new GameScene(this.game, this.nextLevel));
+      this.game.changeScene(new GameScene(this.game, this.nextLevel, this.run));
     }
   }
 
@@ -72,7 +81,6 @@ export class TransitionScene implements Scene {
     this.starfield.render(ctx);
     ctx.restore();
 
-    // Líneas de warp hacia el centro
     ctx.save();
     ctx.translate(cx, cy);
     const rays = 24;
@@ -112,7 +120,7 @@ export class TransitionScene implements Scene {
 
     ctx.font = "700 22px 'JetBrains Mono', monospace";
     ctx.fillStyle = WARM_W;
-    ctx.fillText(this.score.toString().padStart(8, "0"), cx, cy + 52);
+    ctx.fillText(this.run.score.toString().padStart(8, "0"), cx, cy + 52);
 
     const remain = Math.ceil(DURATION - this.time);
     ctx.font = "400 11px 'JetBrains Mono', monospace";

@@ -1,11 +1,15 @@
 // HUD cinematográfico estilo Interstellar — ámbar + azul hielo
 
 import type { WeaponType } from "../../types";
+import { getRecordHudMessage } from "../scores/ScoreTable";
 import { WEAPON_LABEL } from "../systems/WeaponSystem";
 
 export interface HudState {
   score: number;
+  /** Mejor puntaje guardado (partidas anteriores). */
+  historicalRecord: number;
   level: number;
+  totalSectors?: number;
   levelName: string;
   wave: number;
   totalWaves: number;
@@ -21,6 +25,8 @@ export interface HudState {
   bombs?: number;
   buffLabel?: string;
   buffTimer?: number;
+  wingCount?: number;
+  wingMax?: number;
   // boss (opcionales)
   bossHp?: number;
   bossMaxHp?: number;
@@ -55,7 +61,11 @@ export class HUD {
     ctx.save();
 
     this.renderTopBar(ctx, w, state);
+    this.renderRecordHint(ctx, w, state);
     this.renderLives(ctx, state.lives);
+    if (state.wingCount !== undefined && state.wingCount > 0) {
+      this.renderWingCount(ctx, state.wingCount, state.wingMax);
+    }
     this.renderWeapon(ctx, state.weapon, state.weaponColor);
     this.renderAmmo(ctx, state);
     this.renderLevelInfo(ctx, w, state);
@@ -159,6 +169,27 @@ export class HUD {
     }
   }
 
+  private renderRecordHint(ctx: CanvasRenderingContext2D, w: number, state: HudState): void {
+    const msg = getRecordHudMessage(state.score, state.historicalRecord);
+    const beating = msg.startsWith("¡");
+    const topOffset = state.multiplier > 1 ? 62 : 48;
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.font = beating
+      ? "600 11px 'JetBrains Mono', monospace"
+      : "400 10px 'JetBrains Mono', monospace";
+    ctx.letterSpacing = beating ? "1px" : "0.5px";
+    ctx.fillStyle = beating ? AMBER : DIM;
+    if (beating) {
+      ctx.shadowColor = AMBER;
+      ctx.shadowBlur = 6;
+    }
+    ctx.fillText(msg, w / 2, topOffset);
+    ctx.shadowBlur = 0;
+    ctx.letterSpacing = "0px";
+  }
+
   private renderLives(ctx: CanvasRenderingContext2D, lives: number): void {
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
@@ -194,6 +225,18 @@ export class HUD {
       ctx.fill();
       ctx.restore();
     }
+    ctx.shadowBlur = 0;
+  }
+
+  private renderWingCount(ctx: CanvasRenderingContext2D, count: number, max?: number): void {
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.font = "600 10px 'JetBrains Mono', monospace";
+    ctx.fillStyle = "#50e8c8";
+    ctx.shadowColor = "#50e8c8";
+    ctx.shadowBlur = 6;
+    const label = max !== undefined ? `WING ${count}/${max}` : `WING ×${count}`;
+    ctx.fillText(label, 88, 28);
     ctx.shadowBlur = 0;
   }
 
@@ -266,7 +309,10 @@ export class HUD {
     ctx.fillStyle = ICE;
     ctx.shadowColor = ICE;
     ctx.shadowBlur = 6;
-    ctx.fillText(`LVL ${state.level}  ${state.levelName.toUpperCase()}`, w - 18, 10);
+    const sectorLabel = state.totalSectors
+      ? `SECTOR ${state.level}/${state.totalSectors}`
+      : `LVL ${state.level}`;
+    ctx.fillText(`${sectorLabel}  ${state.levelName.toUpperCase()}`, w - 18, 10);
     ctx.shadowBlur = 0;
 
     const barW = 160;

@@ -6,6 +6,8 @@ import { Starfield } from "../systems/Starfield";
 import { MenuScene } from "./MenuScene";
 import { GameScene } from "./GameScene";
 import { soundManager } from "../../audio/SoundManager";
+import { saveScore } from "../scores/ScoreTable";
+import { renderLeaderboard } from "../ui/LeaderboardUI";
 
 interface Button {
   label: string;
@@ -47,6 +49,7 @@ export class GameOverScene implements Scene {
   enter(): void {
     soundManager.init();
     soundManager.play("defeat");
+    saveScore(this.score);
     this.starfield.resize(this.game.width, this.game.height);
     this.buildButtons();
   }
@@ -63,7 +66,7 @@ export class GameOverScene implements Scene {
       {
         label: "RETRY MISSION",
         x: cx - 155,
-        y: cy + 72,
+        y: cy + 118,
         w: 310,
         h: 52,
         primary: true,
@@ -72,7 +75,7 @@ export class GameOverScene implements Scene {
       {
         label: "MAIN MENU",
         x: cx - 100,
-        y: cy + 136,
+        y: cy + 182,
         w: 200,
         h: 40,
         primary: false,
@@ -142,6 +145,12 @@ export class GameOverScene implements Scene {
 
     this.renderTitle(ctx, cx, cy - 108);
     this.renderScore(ctx, cx, cy - 28);
+    renderLeaderboard(ctx, cx, cy + 36, {
+      title: "HIGH SCORES",
+      maxRows: 5,
+      highlightScore: this.score,
+      width: Math.min(340, w - 48),
+    });
     this.renderButtons(ctx);
     this.renderHint(ctx, cx, h - 40);
     this.renderVignette(ctx, w, h);

@@ -1,18 +1,34 @@
 // Escena de gameplay — estilo Interstellar con sistema de audio procedural
 
 import type { Scene, PowerUpType, WeaponType } from "../../types";
+import type { GameStateSnapshot } from "../../ai/copilot-types";
+import { CopilotBrain } from "../../ai/CopilotBrain";
 import type { Game } from "../Game";
 import { Bullet } from "../entities/Bullet";
 import { Boss, BOSS_MINION_CAP } from "../entities/Boss";
 import { Enemy } from "../entities/Enemy";
 import { Player } from "../entities/Player";
+import {
+  Ally,
+  ALLY_DIRECT_SPAWN_RATIO,
+  allyDropChance,
+} from "../entities/Ally";
 import { PowerUp, POWERUP_DROP_CHANCE, rollPowerUpType } from "../entities/PowerUp";
 import { Camera } from "../systems/Camera";
 import { CollisionSystem } from "../systems/CollisionSystem";
 import { ParticleSystem } from "../systems/ParticleSystem";
 import { Starfield } from "../systems/Starfield";
 import { WaveManager, LEVELS } from "../systems/WaveManager";
+import { DEFAULT_RUN, type RunState } from "../RunState";
+import {
+  ACT1_FINAL_SECTOR,
+  BOSS_NAMES,
+  TOTAL_SECTORS,
+  combinedEnemyScale,
+  isAct2,
+} from "../sectorConfig";
 import { WeaponSystem } from "../systems/WeaponSystem";
+import { getHistoricalRecord } from "../scores/ScoreTable";
 import { HUD } from "../ui/HUD";
 import { Pool } from "../../utils/pool";
 import { distance, distanceSq, lerpAngle, randRange } from "../../utils/math";
@@ -20,6 +36,7 @@ import { MenuScene } from "./MenuScene";
 import { GameOverScene } from "./GameOverScene";
 import { VictoryScene } from "./VictoryScene";
 import { TransitionScene } from "./TransitionScene";
+import { BlackHoleScene } from "./BlackHoleScene";
 import { soundManager } from "../../audio/SoundManager";
 
 const WEAPON_KEYS: Record<string, WeaponType> = {
@@ -39,13 +56,19 @@ const SHOOT_SOUND_GAP: Record<WeaponType, number> = {
   laser: 0.12, missiles: 0.35, plasma: 0.45, burst: 0.55, railgun: 0.7, flak: 0.35,
 };
 
-type Status = "playing" | "boss";
+type Status = "playing" | "boss" | "victory-celebration";
 
-const BOSS_NAMES = ["VOID HERALD", "GRAVITY LEVIATHAN", "VOID CORE"];
+const VICTORY_CELEBRATION_FINAL = 3.2;
+const VICTORY_CELEBRATION_SECTOR = 1.9;
+
+export interface GameSceneOptions {
+  /** Tras cinemática del agujero negro: vidas al máximo, munición llena, sin escudo. */
+  act2Entry?: boolean;
+}
 
 export class GameScene implements Scene {
   private readonly game: Game;
-  private readonly starfield = new Starfield(1.6);
+  private readonly starfield: Starfield;
   private readonly camera = new Camera();
   private readonly weapons = new WeaponSystem();
   private readonly bullets = new Pool<Bullet>(() => new Bullet(), 128);
@@ -53,9 +76,11 @@ export class GameScene implements Scene {
   private readonly collisions = new CollisionSystem();
   private readonly waves = new WaveManager();
   private readonly hud = new HUD();
+  private readonly copilot: CopilotBrain;
   private player: Player;
   private enemies: Enemy[] = [];
   private powerUps: PowerUp[] = [];
+  private allies: Ally[] = [];
   private boss: Boss | null = null;
 
   private status: Status = "playing";
@@ -74,6 +99,7 @@ export class GameScene implements Scene {
   private damageTimer = 0;
   private damageMult = 1;
   private buffLabel = "";
+  private allyHintTimer = 0;
 
   private shootTimers: Record<WeaponType, number> = {
     laser: 0, missiles: 0, plasma: 0, burst: 0, railgun: 0, flak: 0,
@@ -81,10 +107,41 @@ export class GameScene implements Scene {
 
   private restartHover = false;
 
-  constructor(game: Game, level = 1) {
+  private victoryCelebrationTimer = 0;
+  private victoryCelebrationTotal = 0;
+  private victoryFlash = 0;
+  private victoryBannerT = 0;
+  private victoryIsFinal = false;
+  private victoryBlackHoleNext = false;
+  private victoryBurstTimer = 0;
+
+  constructor(
+    game: Game,
+    level = 1,
+    run: Partial<RunState> = {},
+    options: GameSceneOptions = {},
+  ) {
     this.game = game;
     this.level = level;
+    this.starfield = new Starfield(1.6, isAct2(level) ? "act2" : "act1");
     this.player = new Player(game.width / 2, game.height * 0.82);
+    const merged = { ...DEFAULT_RUN, ...run };
+    this.score = merged.score;
+    this.player.lives = merged.lives;
+    this.storedBombs = merged.storedBombs;
+    this.weapons.setWeapon(merged.weapon);
+    if (options.act2Entry) {
+      this.player.lives = 3;
+      this.player.shield = false;
+      this.player.invuln = 2.5;
+      this.weapons.refillAmmo();
+    }
+    this.copilot = new CopilotBrain({
+      changeWeapon: (w) => this.copilotChangeWeapon(w),
+      activateShield: () => this.copilotActivateShield(),
+      deployBomb: () => this.copilotDeployBomb(),
+      getGameState: () => this.getCopilotGameState(),
+    });
   }
 
   enter(): void {
@@ -92,10 +149,14 @@ export class GameScene implements Scene {
     soundManager.startAmbient("game");
     soundManager.play("level_start");
     this.starfield.resize(this.game.width, this.game.height);
-    this.waves.loadLevel(LEVELS[this.level - 1]);
+    this.waves.loadLevel(LEVELS[this.level - 1], this.level);
+    this.copilot.start();
+    window.novaSay = (text: string) => this.copilot.handleTextInput(text);
   }
 
   exit(): void {
+    this.copilot.stop();
+    if (window.novaSay) delete window.novaSay;
     soundManager.stopAmbient();
   }
 
@@ -109,8 +170,14 @@ export class GameScene implements Scene {
   }
 
   update(dt: number): void {
+    if (this.status === "victory-celebration") {
+      this.updateVictoryCelebration(dt);
+      return;
+    }
+
     const { input } = this.game;
     this.time += dt;
+    this.copilot.update(dt);
     this.starfield.update(dt);
     this.particles.update(dt);
     this.camera.update(dt);
@@ -162,8 +229,13 @@ export class GameScene implements Scene {
       this.deployBomb();
     }
 
+    if (input.wasPressed("Backquote")) {
+      this.copilot.handleTextInput("estado");
+    }
+
     this.updateCombo(dt);
     this.updatePlayerAndWeapons(dt);
+    this.updateAllies(dt);
     this.updatePowerUps(dt);
     this.updateBullets(dt);
     this.resolveCollisions();
@@ -184,15 +256,19 @@ export class GameScene implements Scene {
   }
 
   private updateBuffs(dt: number): void {
+    if (this.multishotTimer > 0) this.multishotTimer -= dt;
+    if (this.speedTimer > 0) this.speedTimer -= dt;
+    if (this.damageTimer > 0) this.damageTimer -= dt;
+    if (this.allyHintTimer > 0) this.allyHintTimer -= dt;
+
     if (this.multishotTimer > 0) {
-      this.multishotTimer -= dt;
       this.buffLabel = "MULTI";
     } else if (this.speedTimer > 0) {
-      this.speedTimer -= dt;
       this.buffLabel = "SPEED";
     } else if (this.damageTimer > 0) {
-      this.damageTimer -= dt;
       this.buffLabel = "DMG+";
+    } else if (this.allyHintTimer > 0) {
+      this.buffLabel = "WING+";
     } else {
       this.buffLabel = "";
     }
@@ -202,7 +278,20 @@ export class GameScene implements Scene {
   }
 
   private get buffTimer(): number {
-    return Math.max(this.multishotTimer, this.speedTimer, this.damageTimer);
+    return Math.max(this.multishotTimer, this.speedTimer, this.damageTimer, this.allyHintTimer);
+  }
+
+  private aliveAllyCount(): number {
+    return this.allies.filter((a) => a.alive).length;
+  }
+
+  private updateAllies(dt: number): void {
+    const { width, height } = this.game;
+    const aim = this.nearestTarget(this.player.x, this.player.y);
+    for (const a of this.allies) {
+      a.update(dt, this.player, this.bullets, width, height, aim);
+    }
+    this.allies = this.allies.filter((a) => a.alive);
   }
 
   private updateCombo(dt: number): void {
@@ -316,7 +405,17 @@ export class GameScene implements Scene {
     if (!this.boss) return;
     const e = new Enemy();
     const offsetX = (Math.random() - 0.5) * 90;
-    e.spawn(type, this.boss.x + offsetX, this.boss.y + this.boss.radius + 8, randRange(110, 200));
+    const scale = combinedEnemyScale(this.level, this.waves.totalWaves, this.waves.totalWaves);
+    e.spawn(
+      type,
+      this.boss.x + offsetX,
+      this.boss.y + this.boss.radius + 8,
+      randRange(110, 200),
+      scale.hpMult,
+      scale.speedMult,
+      scale.fireRateMult,
+      scale.bulletSpeedMult,
+    );
     this.enemies.push(e);
     this.particles.spark(e.x, e.y, e.color, 6);
   }
@@ -342,6 +441,8 @@ export class GameScene implements Scene {
     }
 
     this.collisions.enemyBulletsVsPlayer(this.bullets, this.player, () => this.hitPlayer());
+    this.collisions.enemyBulletsVsAllies(this.bullets, this.allies, (ally) => this.hitAlly(ally));
+    this.collisions.enemiesVsAllies(this.enemies, this.allies, (ally) => this.hitAlly(ally));
     this.collisions.enemiesVsPlayer(this.enemies, this.player, (enemy) => {
       this.hitPlayer();
       enemy.alive = false;
@@ -389,7 +490,8 @@ export class GameScene implements Scene {
       }
     }
 
-    if (Math.random() < POWERUP_DROP_CHANCE) {
+    const allyPickup = this.tryAllyOnKill(enemy.x, enemy.y);
+    if (!allyPickup && Math.random() < POWERUP_DROP_CHANCE) {
       const pu = new PowerUp();
       pu.spawn(rollPowerUpType(), enemy.x, enemy.y);
       this.powerUps.push(pu);
@@ -402,6 +504,10 @@ export class GameScene implements Scene {
     if (!this.boss || this.boss.scored) return;
     this.boss.scored = true;
 
+    const bx = this.boss.x;
+    const by = this.boss.y;
+    const bossColor = this.boss.color;
+
     for (const e of [...this.enemies]) {
       if (e.alive) {
         e.alive = false;
@@ -410,23 +516,121 @@ export class GameScene implements Scene {
     }
     this.enemies = [];
 
-    this.particles.explosion(this.boss.x, this.boss.y, this.boss.color, 60, 380);
-    this.particles.explosion(this.boss.x, this.boss.y, "#ffffff", 30, 500);
+    for (const b of this.bullets.active) {
+      if (!b.friendly) b.alive = false;
+    }
+    this.bullets.sweep((b) => !b.alive);
+
+    this.particles.explosion(bx, by, bossColor, 60, 380);
+    this.particles.explosion(bx, by, "#ffffff", 30, 500);
+    this.particles.explosion(bx, by, "#f8d060", 45, 420);
+    this.particles.explosion(bx, by, "#80c8ff", 28, 340);
     this.camera.shake(16, 0.6);
     soundManager.play("explosion_large");
     this.addKill(this.boss.points);
     this.boss = null;
-    this.onSectorCleared();
+
+    if (this.level === ACT1_FINAL_SECTOR) {
+      this.startVictoryCelebration(bx, by, false, true);
+      return;
+    }
+    const isFinal = this.level >= TOTAL_SECTORS;
+    this.startVictoryCelebration(bx, by, isFinal);
   }
 
-  private onSectorCleared(): void {
-    if (this.level >= LEVELS.length) {
-      this.game.changeScene(new VictoryScene(this.game, this.score));
+  private snapshotRun(): RunState {
+    return {
+      score: this.score,
+      lives: this.player.lives,
+      storedBombs: this.storedBombs,
+      weapon: this.weapons.current,
+    };
+  }
+
+  private startVictoryCelebration(
+    bx: number,
+    by: number,
+    isFinal: boolean,
+    blackHoleNext = false,
+  ): void {
+    this.status = "victory-celebration";
+    this.victoryIsFinal = isFinal;
+    this.victoryBlackHoleNext = blackHoleNext;
+    this.victoryCelebrationTotal = isFinal ? VICTORY_CELEBRATION_FINAL : VICTORY_CELEBRATION_SECTOR;
+    this.victoryCelebrationTimer = this.victoryCelebrationTotal;
+    this.victoryFlash = 1.35;
+    this.victoryBannerT = 0;
+    this.victoryBurstTimer = 0;
+    this.player.invuln = Math.max(this.player.invuln, this.victoryCelebrationTotal + 0.5);
+
+    soundManager.play(isFinal ? "victory" : "warp");
+    this.particles.explosion(bx, by, "#f8d060", isFinal ? 80 : 40, isFinal ? 480 : 300);
+    this.particles.spark(bx, by, "#80c8ff", isFinal ? 24 : 12);
+  }
+
+  private updateVictoryCelebration(dt: number): void {
+    const slow = 0.42;
+    this.time += dt;
+    this.starfield.update(dt * slow);
+    this.particles.update(dt);
+    this.camera.update(dt);
+
+    this.victoryCelebrationTimer -= dt;
+    this.victoryFlash = Math.max(0, this.victoryFlash - dt * 1.1);
+    this.victoryBannerT = Math.min(1, this.victoryBannerT + dt * 2.2);
+
+    this.victoryBurstTimer -= dt;
+    if (this.victoryBurstTimer <= 0) {
+      this.victoryBurstTimer = 0.14;
+      const w = this.game.width;
+      const h = this.game.height;
+      const x = Math.random() * w;
+      const y = Math.random() * h * 0.55;
+      this.particles.explosion(x, y, "#f8d060", 6, 140);
+      this.particles.spark(x, y, "#80c8ff", 4);
+    }
+
+    if (this.victoryCelebrationTimer <= 0) {
+      this.finishVictoryCelebration();
+    }
+  }
+
+  private finishVictoryCelebration(): void {
+    const run = this.snapshotRun();
+    if (this.victoryBlackHoleNext) {
+      this.game.changeScene(new BlackHoleScene(this.game, run));
+      return;
+    }
+    if (this.victoryIsFinal) {
+      this.game.changeScene(new VictoryScene(this.game, run.score));
       return;
     }
     const next = LEVELS[this.level];
     this.game.changeScene(
-      new TransitionScene(this.game, this.level + 1, next.name, this.score, this.levelKills),
+      new TransitionScene(
+        this.game,
+        this.level + 1,
+        next.name,
+        run,
+        this.levelKills,
+      ),
+    );
+  }
+
+  private onSectorCleared(): void {
+    if (this.level >= TOTAL_SECTORS) {
+      this.startVictoryCelebration(this.game.width / 2, this.game.height * 0.35, true);
+      return;
+    }
+    const next = LEVELS[this.level];
+    this.game.changeScene(
+      new TransitionScene(
+        this.game,
+        this.level + 1,
+        next.name,
+        this.snapshotRun(),
+        this.levelKills,
+      ),
     );
   }
 
@@ -450,7 +654,112 @@ export class GameScene implements Scene {
       case "bomb":
         this.storedBombs = Math.min(3, this.storedBombs + 1);
         break;
+      case "ally":
+        if (this.spawnAlly()) {
+          this.allyHintTimer = 2.5;
+        }
+        break;
     }
+  }
+
+  /** Drop progresivo de escolta: más probable a más bajas en el sector. */
+  private tryAllyOnKill(x: number, y: number): boolean {
+    if (Math.random() >= allyDropChance(this.levelKills)) return false;
+
+    if (Math.random() < ALLY_DIRECT_SPAWN_RATIO) {
+      if (this.spawnAlly()) {
+        this.allyHintTimer = 2.5;
+        this.particles.spark(x, y, "#50e8c8", 14);
+      }
+      return false;
+    }
+
+    const pu = new PowerUp();
+    pu.spawn("ally", x, y);
+    this.powerUps.push(pu);
+    return true;
+  }
+
+  private spawnAlly(): boolean {
+    const used = new Set(this.allies.filter((a) => a.alive).map((a) => a.slot));
+    let slot = 0;
+    while (used.has(slot)) slot += 1;
+
+    const ally = new Ally(slot);
+    const off = Ally.formationOffset(slot, this.player.angle);
+    ally.x = this.player.x + off.x;
+    ally.y = this.player.y + off.y;
+    ally.angle = this.player.angle;
+    this.allies.push(ally);
+    this.particles.spark(ally.x, ally.y, "#50e8c8", 16);
+    return true;
+  }
+
+  private hitAlly(ally: Ally): void {
+    if (!ally.alive) return;
+    if (ally.takeDamage()) {
+      this.particles.explosion(ally.x, ally.y, "#50e8c8", 12, 160);
+      soundManager.play("explosion_small");
+    }
+  }
+
+  /** Cambio de arma vía NOVA (voz / Claude / fallback). */
+  copilotChangeWeapon(weapon: WeaponType): void {
+    const valid: WeaponType[] = ["laser", "missiles", "plasma", "burst", "railgun", "flak"];
+    if (!valid.includes(weapon)) return;
+    this.weapons.setWeapon(weapon);
+    soundManager.play("ui_click");
+  }
+
+  /** Escudo vía NOVA. */
+  copilotActivateShield(): void {
+    if (!this.player.alive) return;
+    this.player.shield = true;
+    this.particles.spark(this.player.x, this.player.y, "#80c8ff", 14);
+    soundManager.play("powerup");
+  }
+
+  /** Bomba vía NOVA — devuelve false si no hay cargas. */
+  copilotDeployBomb(): boolean {
+    if (this.storedBombs <= 0) return false;
+    this.deployBomb();
+    return true;
+  }
+
+  getCopilotGameState(): GameStateSnapshot {
+    const { width, height } = this.game;
+    const mx = width * 0.5;
+    const my = height * 0.5;
+    const dx = this.player.x - mx;
+    const dy = this.player.y - my;
+    const marginX = width * 0.12;
+    const marginY = height * 0.12;
+    let quadrant: GameStateSnapshot["player_position_quadrant"] = "C";
+    if (Math.abs(dx) >= marginX || Math.abs(dy) >= marginY) {
+      const top = this.player.y < my;
+      const left = this.player.x < mx;
+      quadrant = top ? (left ? "TL" : "TR") : left ? "BL" : "BR";
+    }
+
+    const types = new Set<string>();
+    for (const e of this.enemies) {
+      if (e.alive) types.add(e.type);
+    }
+
+    return {
+      player_health: this.player.lives,
+      player_position_quadrant: quadrant,
+      enemy_count:
+        this.enemies.filter((e) => e.alive).length + (this.boss?.alive ? 1 : 0),
+      enemy_types_on_screen: [...types],
+      current_weapon: this.weapons.current,
+      boss_phase: this.boss?.alive ? this.boss.phase : null,
+      score: this.score,
+      bombs_available: this.storedBombs,
+      shield_active: this.player.shield,
+      level: this.level,
+      combat_status: this.status === "boss" ? "boss" : "waves",
+    };
   }
 
   private deployBomb(): void {
@@ -523,14 +832,17 @@ export class GameScene implements Scene {
     for (const pu of this.powerUps) pu.render(ctx);
     for (const e of this.enemies) e.render(ctx);
     if (this.boss?.alive) this.boss.render(ctx);
+    for (const a of this.allies) a.render(ctx);
     this.particles.render(ctx);
     if (this.player.alive) this.player.render(ctx, this.weapons.color);
     this.camera.end(ctx);
 
     this.hud.render(ctx, w, h, {
-      score:          this.score,
-      level:          this.level,
-      levelName:      LEVELS[this.level - 1].name,
+      score:            this.score,
+      historicalRecord: getHistoricalRecord(),
+      level:            this.level,
+      totalSectors:     TOTAL_SECTORS,
+      levelName:        LEVELS[this.level - 1].name,
       wave:           this.status === "boss" ? this.waves.totalWaves : this.waves.waveNumber,
       totalWaves:     this.waves.totalWaves,
       lives:          this.player.lives,
@@ -544,6 +856,7 @@ export class GameScene implements Scene {
       bombs:          this.storedBombs,
       buffLabel:      this.buffLabel,
       buffTimer:      this.buffTimer,
+      wingCount:      this.aliveAllyCount(),
       ...(this.boss ? {
         bossHp:    this.boss.hp,
         bossMaxHp: this.boss.maxHp,
@@ -554,7 +867,73 @@ export class GameScene implements Scene {
     }, this.restartHover);
 
     if (this.comboFlash > 0 && this.multiplier > 1) this.renderComboFlash(ctx, w, h);
+    if (this.status === "victory-celebration") this.renderVictoryCelebration(ctx, w, h);
+    this.copilot.ui.render(ctx, w, h);
     this.renderVignette(ctx, w, h);
+  }
+
+  private renderVictoryCelebration(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+    const cx = w / 2;
+    const cy = h / 2;
+    const progress = 1 - this.victoryCelebrationTimer / this.victoryCelebrationTotal;
+
+    if (this.victoryFlash > 0) {
+      ctx.save();
+      ctx.fillStyle = `rgba(248, 208, 96, ${Math.min(0.5, this.victoryFlash * 0.38)})`;
+      ctx.fillRect(0, 0, w, h);
+      ctx.restore();
+    }
+
+    // Rayos dorados desde el centro
+    ctx.save();
+    ctx.translate(cx, cy);
+    const rays = 18;
+    for (let i = 0; i < rays; i++) {
+      const a = (i / rays) * Math.PI * 2 + this.time * 0.35;
+      const len = 60 + progress * Math.max(w, h) * 0.42;
+      ctx.strokeStyle = `rgba(248, 208, 96, ${0.04 + progress * 0.14})`;
+      ctx.lineWidth = 1 + progress * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * 24, Math.sin(a) * 24);
+      ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    const bannerAlpha = Math.min(1, this.victoryBannerT);
+    const scale = 0.88 + Math.sin(this.time * 3.5) * 0.04;
+    ctx.save();
+    ctx.globalAlpha = bannerAlpha;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    ctx.font = `900 ${Math.floor(46 * scale)}px 'Orbitron', sans-serif`;
+    ctx.fillStyle = "#f8d060";
+    ctx.shadowColor = "#e8a840";
+    ctx.shadowBlur = 36 + progress * 24;
+    ctx.letterSpacing = "6px";
+    ctx.fillText("SECTOR CLEARED", cx, cy - 28);
+    ctx.shadowBlur = 0;
+
+    ctx.font = "400 14px 'IBM Plex Sans', sans-serif";
+    ctx.fillStyle = "#80c8ff";
+    ctx.letterSpacing = "4px";
+    const sub = this.victoryIsFinal
+      ? "MISSION COMPLETE"
+      : this.victoryBlackHoleNext
+        ? "GRAVITATIONAL COLLAPSE"
+        : "PREPARING WARP";
+    ctx.fillText(sub, cx, cy + 18);
+
+    if (this.victoryIsFinal) {
+      ctx.font = "700 22px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#f4ead8";
+      ctx.letterSpacing = "2px";
+      ctx.fillText(this.score.toString().padStart(8, "0"), cx, cy + 58);
+    }
+
+    ctx.letterSpacing = "0px";
+    ctx.restore();
   }
 
   private renderComboFlash(ctx: CanvasRenderingContext2D, w: number, h: number): void {

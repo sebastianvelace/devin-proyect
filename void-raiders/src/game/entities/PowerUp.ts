@@ -9,6 +9,7 @@ const COLORS: Record<PowerUpType, string> = {
   speed:     "#e8c030",
   damage:    "#ff3040",
   bomb:      "#f0f0f0",
+  ally:      "#50e8c8",
 };
 
 const LABELS: Record<PowerUpType, string> = {
@@ -17,6 +18,7 @@ const LABELS: Record<PowerUpType, string> = {
   speed:     "SPEED",
   damage:    "DMG+",
   bomb:      "BOMB",
+  ally:      "WING",
 };
 
 export class PowerUp {

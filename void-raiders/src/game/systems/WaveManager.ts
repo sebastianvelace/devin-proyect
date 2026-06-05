@@ -1,6 +1,7 @@
-// Oleadas y formaciones por nivel
+// Oleadas y formaciones por sector (9 niveles)
 
 import type { EnemyType } from "../../types";
+import { combinedEnemyScale } from "../sectorConfig";
 import { Enemy } from "../entities/Enemy";
 import { TAU, randRange } from "../../utils/math";
 
@@ -54,23 +55,90 @@ export const LEVELS: LevelDef[] = [
     ],
     boss: true,
   },
+  // —— Acto 2 (sectores 4–9) ——
+  {
+    name: "EVENT HORIZON RIM",
+    waves: [
+      { groups: [{ type: "hunter", count: 4 }, { type: "elite", count: 2 }, { type: "fast", count: 3 }], formation: "v" },
+      { groups: [{ type: "sniper", count: 2 }, { type: "bomber", count: 2 }, { type: "basic", count: 4 }], formation: "random" },
+      { groups: [{ type: "tank", count: 1 }, { type: "elite", count: 3 }, { type: "hunter", count: 3 }], formation: "circle" },
+      { groups: [{ type: "fast", count: 5 }, { type: "sniper", count: 2 }, { type: "elite", count: 2 }], formation: "spiral" },
+    ],
+    boss: true,
+  },
+  {
+    name: "GRAVITY SHEAR",
+    waves: [
+      { groups: [{ type: "bomber", count: 3 }, { type: "hunter", count: 3 }, { type: "fast", count: 4 }], formation: "line" },
+      { groups: [{ type: "tank", count: 2 }, { type: "elite", count: 2 }, { type: "sniper", count: 2 }], formation: "v" },
+      { groups: [{ type: "sniper", count: 3 }, { type: "elite", count: 3 }, { type: "basic", count: 3 }], formation: "random" },
+      { groups: [{ type: "hunter", count: 4 }, { type: "bomber", count: 2 }, { type: "fast", count: 3 }], formation: "circle" },
+      { groups: [{ type: "tank", count: 1 }, { type: "sniper", count: 2 }, { type: "elite", count: 3 }, { type: "hunter", count: 2 }], formation: "spiral" },
+    ],
+    boss: true,
+  },
+  {
+    name: "TIDAL CASCADE",
+    waves: [
+      { groups: [{ type: "elite", count: 4 }, { type: "sniper", count: 2 }, { type: "fast", count: 3 }], formation: "spiral" },
+      { groups: [{ type: "tank", count: 2 }, { type: "bomber", count: 3 }, { type: "hunter", count: 2 }], formation: "circle" },
+      { groups: [{ type: "sniper", count: 3 }, { type: "elite", count: 2 }, { type: "basic", count: 4 }], formation: "line" },
+      { groups: [{ type: "hunter", count: 5 }, { type: "bomber", count: 2 }, { type: "elite", count: 2 }], formation: "v" },
+      { groups: [{ type: "tank", count: 2 }, { type: "sniper", count: 3 }, { type: "fast", count: 4 }], formation: "random" },
+    ],
+    boss: true,
+  },
+  {
+    name: "PHOTON RING",
+    waves: [
+      { groups: [{ type: "bomber", count: 4 }, { type: "elite", count: 3 }, { type: "hunter", count: 3 }], formation: "circle" },
+      { groups: [{ type: "tank", count: 2 }, { type: "sniper", count: 3 }, { type: "fast", count: 4 }], formation: "spiral" },
+      { groups: [{ type: "elite", count: 4 }, { type: "hunter", count: 4 }, { type: "sniper", count: 2 }], formation: "v" },
+      { groups: [{ type: "tank", count: 2 }, { type: "bomber", count: 3 }, { type: "elite", count: 2 }], formation: "line" },
+      { groups: [{ type: "sniper", count: 4 }, { type: "hunter", count: 3 }, { type: "elite", count: 3 }], formation: "random" },
+    ],
+    boss: true,
+  },
+  {
+    name: "ERGOSPHERE",
+    waves: [
+      { groups: [{ type: "hunter", count: 5 }, { type: "tank", count: 2 }, { type: "elite", count: 3 }], formation: "v" },
+      { groups: [{ type: "bomber", count: 4 }, { type: "sniper", count: 3 }, { type: "fast", count: 4 }], formation: "circle" },
+      { groups: [{ type: "tank", count: 3 }, { type: "elite", count: 3 }, { type: "hunter", count: 3 }], formation: "spiral" },
+      { groups: [{ type: "sniper", count: 4 }, { type: "bomber", count: 3 }, { type: "elite", count: 2 }], formation: "random" },
+      { groups: [{ type: "tank", count: 2 }, { type: "hunter", count: 4 }, { type: "sniper", count: 3 }, { type: "elite", count: 2 }], formation: "line" },
+    ],
+    boss: true,
+  },
+  {
+    name: "SINGULARITY CORE",
+    waves: [
+      { groups: [{ type: "elite", count: 5 }, { type: "bomber", count: 3 }, { type: "hunter", count: 4 }], formation: "spiral" },
+      { groups: [{ type: "tank", count: 3 }, { type: "sniper", count: 4 }, { type: "fast", count: 5 }], formation: "circle" },
+      { groups: [{ type: "bomber", count: 4 }, { type: "elite", count: 4 }, { type: "hunter", count: 4 }], formation: "v" },
+      { groups: [{ type: "tank", count: 3 }, { type: "sniper", count: 4 }, { type: "elite", count: 3 }], formation: "line" },
+      { groups: [{ type: "hunter", count: 5 }, { type: "bomber", count: 4 }, { type: "tank", count: 2 }, { type: "elite", count: 3 }], formation: "random" },
+    ],
+    boss: true,
+  },
 ];
 
-const SPAWN_DELAY = 1.4; // segundos entre oleadas
+const SPAWN_DELAY = 1.4;
 
 export class WaveManager {
   private waves: WaveDef[] = [];
   private index = 0;
   private delay = 0;
+  private sectorLevel = 1;
 
-  loadLevel(def: LevelDef): void {
+  loadLevel(def: LevelDef, sectorLevel: number): void {
     this.waves = def.waves;
+    this.sectorLevel = sectorLevel;
     this.index = 0;
-    this.delay = 1; // pausa inicial antes de la primera oleada
+    this.delay = 1;
   }
 
   get waveNumber(): number {
-    // `index` ya avanza al spawnear; la oleada en combate es `index` (mín. 1).
     return Math.min(this.waves.length, Math.max(1, this.index));
   }
 
@@ -82,10 +150,6 @@ export class WaveManager {
     return this.index >= this.waves.length;
   }
 
-  /**
-   * Llamar cada frame. Si no quedan enemigos vivos y se cumplió la pausa,
-   * devuelve los enemigos de la siguiente oleada (si no, `[]`).
-   */
   update(dt: number, aliveCount: number, w: number, h: number): Enemy[] {
     if (this.isComplete || aliveCount > 0) return [];
     this.delay -= dt;
@@ -97,16 +161,28 @@ export class WaveManager {
   }
 
   private build(wave: WaveDef, w: number, h: number): Enemy[] {
+    const waveIndex = this.index;
+    const scale = combinedEnemyScale(this.sectorLevel, waveIndex, this.waves.length);
     const types: EnemyType[] = [];
     for (const g of wave.groups) {
-      for (let i = 0; i < g.count; i++) types.push(g.type);
+      const count = g.count + scale.extraPerGroup;
+      for (let i = 0; i < count; i++) types.push(g.type);
     }
     const positions = this.formationPositions(wave.formation, types.length, w, h);
 
     return types.map((type, i) => {
       const e = new Enemy();
       const p = positions[i];
-      e.spawn(type, p.x, p.y, randRange(80, 220));
+      e.spawn(
+        type,
+        p.x,
+        p.y,
+        randRange(80, 220),
+        scale.hpMult,
+        scale.speedMult,
+        scale.fireRateMult,
+        scale.bulletSpeedMult,
+      );
       return e;
     });
   }

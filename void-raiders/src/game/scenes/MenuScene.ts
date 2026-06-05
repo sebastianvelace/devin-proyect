@@ -5,6 +5,7 @@ import type { Game } from "../Game";
 import { Starfield } from "../systems/Starfield";
 import { GameScene } from "./GameScene";
 import { soundManager } from "../../audio/SoundManager";
+import { renderLeaderboard } from "../ui/LeaderboardUI";
 
 interface Button {
   label: string;
@@ -37,9 +38,8 @@ const DIM_DARK = "#667788";
 const BG_DEEP  = "#020408";
 const RED_ACC  = "#cc4455";
 
-const FONT_TITLE = "'Bangers', cursive";
-const FONT_UI    = "'Nunito', sans-serif";
-const FONT_MONO  = "'JetBrains Mono', monospace";
+const FONT_DISPLAY = "'Syne', sans-serif";
+const FONT_UI      = "'IBM Plex Sans', sans-serif";
 
 export class MenuScene implements Scene {
   private readonly starfield = new Starfield(1.35);
@@ -50,6 +50,7 @@ export class MenuScene implements Scene {
   private toast = "";
   private toastTimer = 0;
   private hoveredButton: Button | null = null;
+  private showingScores = false;
   private readonly game: Game;
 
   constructor(game: Game) {
@@ -111,15 +112,30 @@ export class MenuScene implements Scene {
         onClick: () => this.launch(),
       },
       {
-        label: this.micLabel(),
+        label: "HIGH SCORES",
         x: cx - 115,
         y: cy + 144,
+        w: 230,
+        h: 40,
+        primary: false,
+        onClick: () => this.toggleScores(),
+      },
+      {
+        label: this.micLabel(),
+        x: cx - 115,
+        y: cy + 196,
         w: 230,
         h: 40,
         primary: false,
         onClick: () => this.enableMic(),
       },
     ];
+  }
+
+  private toggleScores(): void {
+    soundManager.play("ui_click");
+    this.showingScores = !this.showingScores;
+    this.buildButtons();
   }
 
   private micLabel(): string {
@@ -183,7 +199,19 @@ export class MenuScene implements Scene {
     }
     this.hoveredButton = hoverTarget;
 
+    if (this.game.input.wasPressed("Escape") && this.showingScores) {
+      soundManager.play("menu_back");
+      this.showingScores = false;
+      this.buildButtons();
+    }
+
     for (const click of this.game.consumeClicks()) {
+      if (this.showingScores && this.hitScoresBackdrop(click.x, click.y)) {
+        soundManager.play("menu_back");
+        this.showingScores = false;
+        this.buildButtons();
+        continue;
+      }
       if (this.hitMuteToggle(click.x, click.y)) {
         soundManager.toggleMute();
         continue;
@@ -194,6 +222,18 @@ export class MenuScene implements Scene {
         }
       }
     }
+  }
+
+  private hitScoresBackdrop(x: number, y: number): boolean {
+    if (!this.showingScores) return false;
+    const { width: w, height: h } = this.game;
+    const panelW = Math.min(380, w - 40);
+    const panelH = 320;
+    const px = (w - panelW) / 2;
+    const py = (h - panelH) / 2;
+    const inside =
+      x >= px && x <= px + panelW && y >= py && y <= py + panelH;
+    return !inside;
   }
 
   private updateParticles(dt: number): void {
@@ -238,11 +278,14 @@ export class MenuScene implements Scene {
     const cx = w / 2;
     const cy = h / 2;
 
-    this.renderTitle(ctx, cx, cy - 210);
-    this.renderTagline(ctx, cx, cy - 168);
-    this.renderHowToPlay(ctx, cx, cy - 32);
-
-    this.renderButtons(ctx);
+    if (this.showingScores) {
+      this.renderScoresOverlay(ctx, cx);
+    } else {
+      this.renderTitle(ctx, cx, cy - 210);
+      this.renderTagline(ctx, cx, cy - 168);
+      this.renderHowToPlay(ctx, cx, cy - 32);
+      this.renderButtons(ctx);
+    }
     this.renderAudioToggle(ctx);
     this.renderHint(ctx, cx, h - 40);
     this.renderToast(ctx, cx, cy + 218);
@@ -264,8 +307,8 @@ export class MenuScene implements Scene {
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = `400 76px ${FONT_TITLE}`;
-    ctx.letterSpacing = "3px";
+    ctx.font = `500 56px ${FONT_DISPLAY}`;
+    ctx.letterSpacing = "6px";
     ctx.fillStyle = WARM_W;
     ctx.fillText("VOID RAIDERS", x, y);
     ctx.restore();
@@ -275,10 +318,10 @@ export class MenuScene implements Scene {
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = `600 13px ${FONT_UI}`;
+    ctx.font = `400 12px ${FONT_UI}`;
     ctx.letterSpacing = "3px";
     ctx.fillStyle = DIM;
-    ctx.fillText("DEEP SPACE COMBAT", x, y);
+    ctx.fillText("9 SECTORS · DEEP SPACE COMBAT", x, y);
     ctx.restore();
   }
 
@@ -286,26 +329,27 @@ export class MenuScene implements Scene {
     const p = this.game.pointer;
     for (const b of this.buttons) {
       const hover = p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
+      const accent = b.primary ? AMBER : ICE;
       const tx = b.x + b.w / 2;
       const ty = b.y + b.h / 2 + 1;
 
       ctx.save();
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.letterSpacing = b.primary ? "4px" : "2px";
+      ctx.letterSpacing = b.primary ? "3px" : "2px";
       ctx.font = b.primary
-        ? `700 15px ${FONT_UI}`
-        : `600 12px ${FONT_UI}`;
-      ctx.fillStyle = hover ? WARM_W : (b.primary ? WARM_W : DIM);
+        ? `500 15px ${FONT_UI}`
+        : `400 13px ${FONT_UI}`;
+      ctx.fillStyle = hover ? WARM_W : accent;
       ctx.fillText(b.label, tx, ty);
 
-      if (hover && b.primary) {
-        const underlineW = Math.min(b.w * 0.5, ctx.measureText(b.label).width + 8);
-        ctx.strokeStyle = AMBER + "99";
+      if (hover) {
+        const underlineW = Math.min(b.w * 0.55, ctx.measureText(b.label).width + 12);
+        ctx.strokeStyle = accent + "88";
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(tx - underlineW / 2, ty + 12);
-        ctx.lineTo(tx + underlineW / 2, ty + 12);
+        ctx.moveTo(tx - underlineW / 2, ty + 14);
+        ctx.lineTo(tx + underlineW / 2, ty + 14);
         ctx.stroke();
       }
       ctx.restore();
@@ -319,7 +363,7 @@ export class MenuScene implements Scene {
     const label = soundManager.isMuted ? "AUDIO OFF" : "AUDIO ON";
 
     ctx.save();
-    ctx.font = `400 10px ${FONT_MONO}`;
+    ctx.font = `400 11px ${FONT_UI}`;
     ctx.fillStyle = hover ? WARM_W : DIM;
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
@@ -336,41 +380,24 @@ export class MenuScene implements Scene {
     const lines = [
       "WASD o flechas para mover · ratón para apuntar y clic para disparar",
       "Teclas 1–6 cambian el arma · espacio lanza bomba",
-      "Destruye oleadas y derrota al jefe de cada nivel",
+      "Habla con NOVA (mic) o prueba: novaSay(\"misiles\") en consola",
+      "9 sectores — derrota al jefe de cada uno; tras el sector 3, el vacío te traga",
     ];
-    const title = "Cómo jugar";
-    const titleY = y - 56;
+    const title = "CÓMO JUGAR";
+    const titleY = y - 52;
 
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    ctx.font = `700 28px ${FONT_UI}`;
-    ctx.letterSpacing = "1px";
-    ctx.fillStyle = WARM_W;
+    ctx.font = `500 12px ${FONT_UI}`;
+    ctx.letterSpacing = "3px";
+    ctx.fillStyle = AMBER;
     ctx.fillText(title, x, titleY);
 
-    const titleW = ctx.measureText(title).width;
-    const ruleGap = 14;
-    const ruleLen = 36;
-    ctx.strokeStyle = AMBER + "77";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x - titleW / 2 - ruleGap - ruleLen, titleY);
-    ctx.lineTo(x - titleW / 2 - ruleGap, titleY);
-    ctx.moveTo(x + titleW / 2 + ruleGap, titleY);
-    ctx.lineTo(x + titleW / 2 + ruleGap + ruleLen, titleY);
-    ctx.stroke();
-
-    ctx.strokeStyle = AMBER + "44";
-    ctx.beginPath();
-    ctx.moveTo(x - titleW / 2, titleY + 18);
-    ctx.lineTo(x + titleW / 2, titleY + 18);
-    ctx.stroke();
-
-    ctx.font = `400 13px ${FONT_UI}`;
-    ctx.letterSpacing = "0.2px";
-    let lineY = y - 6;
+    ctx.font = `400 12px ${FONT_UI}`;
+    ctx.letterSpacing = "0.5px";
+    let lineY = y - 8;
     for (const line of lines) {
       ctx.fillStyle = DIM + "dd";
       ctx.fillText(line, x, lineY);
@@ -379,13 +406,47 @@ export class MenuScene implements Scene {
     ctx.restore();
   }
 
+  private renderScoresOverlay(ctx: CanvasRenderingContext2D, cx: number): void {
+    const { width: w, height: h } = this.game;
+    ctx.fillStyle = "rgba(2,4,8,0.72)";
+    ctx.fillRect(0, 0, w, h);
+
+    const panelW = Math.min(380, w - 40);
+    const panelH = 320;
+    const px = (w - panelW) / 2;
+    const py = (h - panelH) / 2;
+
+    ctx.fillStyle = "rgba(10,16,24,0.92)";
+    ctx.fillRect(px, py, panelW, panelH);
+    ctx.strokeStyle = ICE + "55";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(px + 0.5, py + 0.5, panelW - 1, panelH - 1);
+
+    renderLeaderboard(ctx, cx, py + 36, {
+      title: "HIGH SCORES",
+      maxRows: 10,
+      width: panelW - 32,
+    });
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.font = `400 11px ${FONT_UI}`;
+    ctx.letterSpacing = "1px";
+    ctx.fillStyle = DIM_DARK;
+    ctx.fillText("ESC o clic fuera para cerrar", cx, py + panelH - 20);
+    ctx.restore();
+  }
+
   private renderHint(ctx: CanvasRenderingContext2D, x: number, y: number): void {
     ctx.save();
     ctx.textAlign = "center";
     ctx.font = `400 11px ${FONT_UI}`;
-    ctx.letterSpacing = "0.5px";
+    ctx.letterSpacing = "1px";
     ctx.fillStyle = DIM_DARK;
-    ctx.fillText("LAUNCH MISSION para empezar  ·  M silencia audio", x, y);
+    const hint = this.showingScores
+      ? "ESC cerrar · M silencia audio"
+      : "LAUNCH MISSION para empezar  ·  HIGH SCORES · M silencia audio";
+    ctx.fillText(hint, x, y);
     ctx.restore();
   }
 
@@ -396,11 +457,9 @@ export class MenuScene implements Scene {
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.textAlign = "center";
-    ctx.font = `400 13px ${FONT_MONO}`;
+    ctx.font = `400 12px ${FONT_UI}`;
     ctx.letterSpacing = "2px";
     ctx.fillStyle = isError ? RED_ACC : AMBER;
-    ctx.shadowColor = isError ? RED_ACC : AMBER;
-    ctx.shadowBlur = 10;
     ctx.fillText(this.toast, x, y);
     ctx.restore();
   }

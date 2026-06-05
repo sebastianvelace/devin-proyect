@@ -22,16 +22,20 @@ const STAR_COLORS = [
   '#ffd0c8',             // rojo-cálida (gigante roja)
 ];
 
+export type StarfieldPalette = "act1" | "act2";
+
 export class Starfield {
   private stars: Star[] = [];
   private w = 0;
   private h = 0;
   private readonly speed: number;
+  private readonly palette: StarfieldPalette;
   /** Offsets de nebulosa que cambian muy lentamente para dar vida al fondo. */
   private nebulaPhase = 0;
 
-  constructor(speed = 1) {
+  constructor(speed = 1, palette: StarfieldPalette = "act1") {
     this.speed = speed;
+    this.palette = palette;
   }
 
   resize(width: number, height: number): void {
@@ -72,32 +76,58 @@ export class Starfield {
     const { w, h } = this;
     const drift = Math.sin(this.nebulaPhase) * 0.015;
 
-    // Nebulosa ámbar (acreción — esquina superior derecha)
+    if (this.palette === "act2") {
+      const ox = w * (0.68 + drift);
+      const oy = h * (0.28 - drift);
+      const g1 = ctx.createRadialGradient(ox, oy, 0, ox, oy, w * 0.52);
+      g1.addColorStop(0, "rgba(180, 40, 120, 0.09)");
+      g1.addColorStop(0.45, "rgba(90, 20, 80, 0.04)");
+      g1.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = g1;
+      ctx.fillRect(0, 0, w, h);
+
+      const bx = w * (0.22 - drift);
+      const by = h * (0.68 + drift);
+      const g2 = ctx.createRadialGradient(bx, by, 0, bx, by, w * 0.44);
+      g2.addColorStop(0, "rgba(255, 120, 40, 0.07)");
+      g2.addColorStop(0.5, "rgba(120, 50, 20, 0.03)");
+      g2.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = g2;
+      ctx.fillRect(0, 0, w, h);
+
+      const px = w * (0.5 + drift * 0.4);
+      const py = h * (0.45 + drift * 0.25);
+      const g3 = ctx.createRadialGradient(px, py, 0, px, py, w * 0.36);
+      g3.addColorStop(0, "rgba(40, 10, 60, 0.06)");
+      g3.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = g3;
+      ctx.fillRect(0, 0, w, h);
+      return;
+    }
+
     const ox = w * (0.75 + drift);
     const oy = h * (0.22 - drift);
     const g1 = ctx.createRadialGradient(ox, oy, 0, ox, oy, w * 0.48);
-    g1.addColorStop(0, 'rgba(200, 95, 15, 0.07)');
-    g1.addColorStop(0.5, 'rgba(160, 70, 10, 0.03)');
-    g1.addColorStop(1, 'rgba(0,0,0,0)');
+    g1.addColorStop(0, "rgba(200, 95, 15, 0.07)");
+    g1.addColorStop(0.5, "rgba(160, 70, 10, 0.03)");
+    g1.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = g1;
     ctx.fillRect(0, 0, w, h);
 
-    // Nebulosa azul hielo (tipo agujero de gusano — esquina inferior izquierda)
     const bx = w * (0.18 - drift);
     const by = h * (0.72 + drift);
     const g2 = ctx.createRadialGradient(bx, by, 0, bx, by, w * 0.4);
-    g2.addColorStop(0, 'rgba(20, 65, 190, 0.08)');
-    g2.addColorStop(0.5, 'rgba(15, 50, 140, 0.04)');
-    g2.addColorStop(1, 'rgba(0,0,0,0)');
+    g2.addColorStop(0, "rgba(20, 65, 190, 0.08)");
+    g2.addColorStop(0.5, "rgba(15, 50, 140, 0.04)");
+    g2.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = g2;
     ctx.fillRect(0, 0, w, h);
 
-    // Nebulosa morada difusa (centro-derecha)
     const px = w * (0.6 + drift * 0.5);
     const py = h * (0.5 + drift * 0.3);
     const g3 = ctx.createRadialGradient(px, py, 0, px, py, w * 0.32);
-    g3.addColorStop(0, 'rgba(60, 20, 100, 0.04)');
-    g3.addColorStop(1, 'rgba(0,0,0,0)');
+    g3.addColorStop(0, "rgba(60, 20, 100, 0.04)");
+    g3.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = g3;
     ctx.fillRect(0, 0, w, h);
   }

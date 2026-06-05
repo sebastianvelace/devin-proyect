@@ -7,7 +7,7 @@ export interface Vec2 {
 
 export type WeaponType = "laser" | "missiles" | "plasma" | "burst" | "railgun" | "flak";
 export type EnemyType = "basic" | "fast" | "elite" | "hunter" | "tank" | "sniper" | "bomber";
-export type PowerUpType = "multishot" | "shield" | "speed" | "damage" | "bomb";
+export type PowerUpType = "multishot" | "shield" | "speed" | "damage" | "bomb" | "ally";
 
 /** Una escena del juego (menu, gameplay, transición, etc.). */
 export interface Scene {

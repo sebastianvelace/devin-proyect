@@ -1,5 +1,6 @@
 // Entry point: inicializa Game
 
+import "./nova-debug";
 import "./styles.css";
 import { soundManager } from "./audio/SoundManager";
 import { Game } from "./game/Game";
